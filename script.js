@@ -214,7 +214,7 @@ class NoticeBoard {
     }
 
     async initializeCloudSync() {
-        if (!window.NPOINT_CONFIG || !window.NPOINT_CONFIG.jsonId || window.NPOINT_CONFIG.jsonId.includes('YOUR_NPOINT_ID')) {
+        if (!window.CLOUD_CONFIG || !this.isCloudConfigValid()) {
             this.updateSyncStatus('offline', 'Cloud sync not configured');
             return;
         }
@@ -225,6 +225,38 @@ class NoticeBoard {
             console.error('Initial cloud sync failed:', error);
             this.updateSyncStatus('error', 'Cloud sync failed');
         }
+    }
+
+    isCloudConfigValid() {
+        const config = window.CLOUD_CONFIG;
+        
+        switch (config.service) {
+            case 'npoint':
+                return this.isNPointConfigValid();
+            case 'tiiny':
+                return this.isTiinyConfigValid();
+            case 'jsonsilo':
+                return this.isJsonsiloConfigValid();
+            case 'multi':
+                return this.isNPointConfigValid() || this.isTiinyConfigValid() || this.isJsonsiloConfigValid();
+            default:
+                return false;
+        }
+    }
+
+    isNPointConfigValid() {
+        const config = window.CLOUD_CONFIG.npoint;
+        return config && config.jsonId && !config.jsonId.includes('YOUR_NPOINT_ID');
+    }
+
+    isTiinyConfigValid() {
+        const config = window.CLOUD_CONFIG.tiiny;
+        return config && config.jsonUrl && !config.jsonUrl.includes('YOUR_TIINY_JSON_URL');
+    }
+
+    isJsonsiloConfigValid() {
+        const config = window.CLOUD_CONFIG.jsonsilo;
+        return config && config.publicUrl && !config.publicUrl.includes('YOUR_JSONSILO_PUBLIC_URL');
     }
 
     startSyncPolling() {
@@ -244,36 +276,30 @@ class NoticeBoard {
     }
 
     async syncWithCloud() {
-        if (!window.NPOINT_CONFIG || !this.isOnline) {
+        if (!window.CLOUD_CONFIG || !this.isOnline) {
             return;
         }
 
+        const config = window.CLOUD_CONFIG;
+        
         try {
             this.updateSyncStatus('syncing', 'Syncing...');
 
-            const response = await fetch(`${window.NPOINT_CONFIG.baseUrl}/${window.NPOINT_CONFIG.jsonId}`);
-
-            if (response.ok) {
-                const cloudData = await response.json();
-                
-                if (cloudData && cloudData.notices) {
-                    const cloudNotices = cloudData.notices;
-                    const cloudLastUpdated = new Date(cloudData.lastUpdated || 0);
-                    const localLastUpdated = new Date(this.lastSyncTime || 0);
-
-                    if (cloudLastUpdated > localLastUpdated) {
-                        this.notices = cloudNotices;
-                        this.saveToStorage();
-                        this.applyFiltersAndSort();
-                        this.render();
-                    }
-                }
-
-                // Note: NPoint.io is read-only, so we only fetch data
-                this.lastSyncTime = new Date().toISOString();
-                this.updateSyncStatus('synced', 'Synced (Read-only)');
-            } else {
-                throw new Error('Failed to fetch from cloud');
+            switch (config.service) {
+                case 'npoint':
+                    await this.syncWithNPoint();
+                    break;
+                case 'tiiny':
+                    await this.syncWithTiiny();
+                    break;
+                case 'jsonsilo':
+                    await this.syncWithJsonsilo();
+                    break;
+                case 'multi':
+                    await this.syncWithMultipleServices();
+                    break;
+                default:
+                    throw new Error('Invalid service configuration');
             }
         } catch (error) {
             console.error('Cloud sync error:', error);
@@ -281,10 +307,144 @@ class NoticeBoard {
         }
     }
 
+    async syncWithNPoint() {
+        const config = window.CLOUD_CONFIG.npoint;
+        if (!this.isNPointConfigValid()) {
+            throw new Error('NPoint configuration invalid');
+        }
+
+        const response = await fetch(`${config.baseUrl}/${config.jsonId}`);
+        
+        if (response.ok) {
+            const cloudData = await response.json();
+            this.processCloudData(cloudData, 'NPoint (Read-only)');
+        } else {
+            throw new Error('Failed to fetch from NPoint');
+        }
+    }
+
+    async syncWithTiiny() {
+        const config = window.CLOUD_CONFIG.tiiny;
+        if (!this.isTiinyConfigValid()) {
+            throw new Error('Tiiny configuration invalid');
+        }
+
+        const response = await fetch(config.jsonUrl);
+        
+        if (response.ok) {
+            const cloudData = await response.json();
+            this.processCloudData(cloudData, 'Tiiny.host (Read-only)');
+        } else {
+            throw new Error('Failed to fetch from Tiiny.host');
+        }
+    }
+
+    async syncWithJsonsilo() {
+        const config = window.CLOUD_CONFIG.jsonsilo;
+        if (!this.isJsonsiloConfigValid()) {
+            throw new Error('JSonsilo configuration invalid');
+        }
+
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        // Add API key if configured for private silos
+        if (config.apiKey) {
+            headers['Authorization'] = `Bearer ${config.apiKey}`;
+        }
+
+        const response = await fetch(config.publicUrl, { headers });
+        
+        if (response.ok) {
+            const cloudData = await response.json();
+            this.processCloudData(cloudData, 'JSonsilo (Read-only)');
+        } else {
+            throw new Error('Failed to fetch from JSonsilo');
+        }
+    }
+
+    async syncWithMultipleServices() {
+        let syncedWithNPoint = false;
+        let syncedWithTiiny = false;
+        let syncedWithJsonsilo = false;
+
+        // Try JSonsilo first (newest service)
+        if (this.isJsonsiloConfigValid()) {
+            try {
+                await this.syncWithJsonsilo();
+                syncedWithJsonsilo = true;
+            } catch (error) {
+                console.error('JSonsilo sync failed:', error);
+            }
+        }
+
+        // Try NPoint as fallback
+        if (!syncedWithJsonsilo && this.isNPointConfigValid()) {
+            try {
+                await this.syncWithNPoint();
+                syncedWithNPoint = true;
+            } catch (error) {
+                console.error('NPoint sync failed:', error);
+            }
+        }
+
+        // Try Tiiny as final fallback
+        if (!syncedWithJsonsilo && !syncedWithNPoint && this.isTiinyConfigValid()) {
+            try {
+                await this.syncWithTiiny();
+                syncedWithTiiny = true;
+            } catch (error) {
+                console.error('Tiiny sync failed:', error);
+            }
+        }
+
+        if (!syncedWithJsonsilo && !syncedWithNPoint && !syncedWithTiiny) {
+            throw new Error('All services failed');
+        }
+
+        const serviceName = syncedWithJsonsilo ? 'JSonsilo' : 
+                           syncedWithNPoint ? 'NPoint' : 'Tiiny';
+        this.updateSyncStatus('synced', `Synced via ${serviceName}`);
+    }
+
+    processCloudData(cloudData, serviceName) {
+        if (cloudData && cloudData.notices) {
+            const cloudNotices = cloudData.notices;
+            const cloudLastUpdated = new Date(cloudData.lastUpdated || 0);
+            const localLastUpdated = new Date(this.lastSyncTime || 0);
+
+            if (cloudLastUpdated > localLastUpdated) {
+                this.notices = cloudNotices;
+                this.saveToStorage();
+                this.applyFiltersAndSort();
+                this.render();
+            }
+        }
+
+        this.lastSyncTime = new Date().toISOString();
+        this.updateSyncStatus('synced', `Synced via ${serviceName}`);
+    }
+
     async uploadToCloud() {
-        // NPoint.io is read-only, so we don't upload data
-        // Data is manually updated through the NPoint.io web interface
-        console.log('NPoint.io is read-only - data not uploaded to cloud');
+        // All current services (NPoint.io, Tiiny.host, JSonsilo) are read-only for this app
+        // Data must be manually updated through their web interfaces
+        const config = window.CLOUD_CONFIG;
+        
+        switch (config.service) {
+            case 'npoint':
+                console.log('NPoint.io is read-only - data not uploaded to cloud');
+                break;
+            case 'tiiny':
+                console.log('Tiiny.host is read-only - data not uploaded to cloud');
+                break;
+            case 'jsonsilo':
+                console.log('JSonsilo is read-only in this implementation - data not uploaded to cloud');
+                break;
+            default:
+                console.log('Read-only services - data not uploaded to cloud');
+        }
+        
         return;
     }
 
