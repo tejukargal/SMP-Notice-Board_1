@@ -1,0 +1,250 @@
+Project Overview
+
+ You are working on a College Notice Board web application - a modern, full-featured client-side application built with vanilla HTML, CSS, and JavaScript. This is a sophisticated notice management system designed for
+  educational institutions with cloud synchronization capabilities.
+
+  Application Architecture
+
+  Core Technology Stack
+
+  - Frontend-only application: Pure vanilla HTML, CSS, and JavaScript
+  - No backend server required: Runs entirely in the browser
+  - Cloud synchronization: Real-time data sync using JSONBin.io API
+  - Offline-first design: Graceful fallback to localStorage when offline
+  - Mobile-responsive: Modern responsive design with horizontal scrolling layout
+  - Single-page application: All functionality in one HTML file with modal interactions
+
+  File Structure
+
+  ├── index.html          # Main HTML structure with modals
+  ├── script.js           # Core NoticeBoard class with cloud sync
+  ├── styles.css          # Complete styling with CSS variables & responsive design
+  ├── CLAUDE.md           # Development guidelines and documentation
+  ├── JSONBIN_SETUP.md    # Cloud synchronization setup instructions
+  └── package-lock.json   # Minimal package file (no dependencies)
+
+  External Dependencies (CDN)
+
+  - Quill.js (1.3.6): Rich text editor with Snow theme
+  - Font Awesome (6.0.0): Icon library for consistent iconography
+  - Inter Font: Modern typography from Google Fonts
+  - Noto Sans Kannada: Support for Kannada language text
+
+  Key Features & Functionality
+
+  Notice Management System
+
+  - CRUD Operations: Create, read, update, delete notices with validation
+  - Rich Text Editor: Quill.js integration with formatting toolbar
+  - Categories: Academic, Events, Exams, Urgent, Scholarship, Fee-payments, Admission, Placement, Library
+  - Priority System: Normal, High, Critical with visual indicators and animations
+  - Deadline Tracking: Optional deadlines with visual overdue/approaching indicators
+  - Tag System: Custom keyword tags for organization and advanced filtering
+
+  Advanced Search & Organization
+
+  - View Modes: Grid and list layouts with horizontal scrolling
+  - Active Tag Filtering: Click tags to filter notices with visual indicators
+
+  Authentication & Admin System
+
+  - Admin Authentication: Keyword-based login system
+  - Admin Code: teju_smp (hardcoded for security)
+  - Session Management: Uses sessionStorage for login persistence
+  - Permission Control: Edit/delete restricted to authenticated admin users
+  - UI State Management: Dynamic admin controls visibility
+
+  Cloud Synchronization
+
+  - JSONBin Integration: Real-time cloud sync with 5-second polling
+  - Offline Fallback: Automatic localStorage fallback when cloud unavailable
+  - Conflict Resolution: Last-write-wins with automatic local backup
+  - Sync Status Indicators: Visual sync status with comprehensive error handling
+  - Auto-backup: Dual storage (online + local) for maximum reliability
+
+  Modern UI/UX Features
+
+  - Dark Mode: Complete dark theme with CSS variables and persistence
+  - Responsive Design: Mobile-first approach with bottom controls on mobile
+  - Glassmorphism: Modern design with backdrop-filter effects
+  - Smooth Animations: CSS transitions, hover effects, and priority pulse animations
+  - Export/Import: JSON, CSV, and PDF export with JSON import capability
+  - Toast Notifications: User feedback system for all actions
+  - Keyboard Shortcuts: Ctrl/Cmd+N for new notice, Escape to close modals
+
+  Technical Implementation Details
+
+  Class Architecture
+
+  - NoticeBoard Class (script.js:1): Main controller with comprehensive state management
+    - Handles all notice operations, filtering, searching, sorting
+    - Manages admin authentication and UI state
+    - Controls cloud sync and offline fallback
+    - Implements real-time polling for updates
+
+  Data Structure
+
+  // Notice Object Structure
+  {
+      id: string,              // Unique timestamp-based identifier
+      title: string,           // Notice title
+      content: string,         // Rich HTML content from Quill editor
+      category: string,        // 'academic'|'events'|'exams'|'urgent'|etc.
+      priority: string,        // 'normal'|'high'|'critical'
+      date: string,           // Publication date (YYYY-MM-DD)
+      deadline: string|null,   // Optional deadline date
+      author: string,         // Department/faculty name
+      tags: string[],         // Array of custom keyword tags
+      timestamp: string,      // Creation timestamp (ISO format)
+      lastModified: string    // Last edit timestamp (ISO format)
+  }
+
+  Storage Architecture
+
+  - localStorage: college-notices (backup/offline), darkMode (theme preference)
+  - sessionStorage: isAdmin (authentication state)
+  - Cloud Storage: JSONBin.io with structure { notices: Notice[], lastUpdated: string }
+
+  CSS Architecture
+
+  - CSS Variables System: Complete design system with custom properties
+  - Dark Mode: CSS variable overrides for seamless theme switching
+  - Responsive Breakpoints: Desktop (default), Tablet (1024px), Mobile (768px), Small Mobile (480px)
+  - Horizontal Scroll Layout: Modern horizontal notice flow with custom scrollbar styling
+  - Glassmorphism Effects: Backdrop-filter with transparency and blur effects
+
+  Development Guidelines
+
+  Code Style & Patterns
+
+  - Class-based JavaScript: Main functionality in NoticeBoard class
+  - Event-driven architecture: Comprehensive event listener management
+  - Modular CSS: Organized by components with CSS variables
+  - Mobile-first responsive: Progressive enhancement for larger screens
+  - Accessibility: Proper ARIA labels, keyboard navigation, focus management
+
+  State Management
+
+  - Filter State: Category filter, selected tags, search query
+  - View State: Grid/list mode, sort order, dark mode preference
+  - Admin State: Authentication status, UI visibility controls
+  - Sync State: Online/offline mode, last sync time, error states
+
+  Error Handling
+
+  - Graceful Degradation: Offline fallback when cloud sync fails
+  - User Feedback: Toast notifications for all operations
+  - Validation: Form validation with user-friendly error messages
+  - Conflict Resolution: Automatic handling of sync conflicts
+
+  Performance Optimization
+
+  - Efficient Rendering: Only re-render when data changes
+  - Search Optimization: Debounced search with real-time results
+  - Memory Management: Proper cleanup of event listeners and timers
+  - Network Efficiency: Smart polling with caching and minimal API calls
+
+  Development Commands
+
+  Local Development
+
+  # Run locally - choose one option:
+  python -m http.server 8000    # Python
+  npx serve .                   # Node.js
+  php -S localhost:8000         # PHP
+
+  # Open in browser
+  open http://localhost:8000
+
+  JSONBin Configuration
+
+  1. Update window.JSONBIN_CONFIG in index.html:239-247
+  2. Replace placeholder API key and bin ID with actual JSONBin.io credentials
+  3. See JSONBIN_SETUP.md for detailed setup instructions
+
+  No Build Process Required
+
+  - Pure vanilla JavaScript - no compilation needed
+  - CSS with modern features - no preprocessing required
+  - Direct browser compatibility - no transpilation needed
+
+  Browser Compatibility Requirements
+
+  - CSS Grid & Flexbox: Modern layout systems
+  - CSS Custom Properties: CSS variables for theming
+  - Backdrop-filter: Glassmorphism effects
+  - ES6 Classes: Modern JavaScript features
+  - Storage APIs: localStorage and sessionStorage
+  - Fetch API: Cloud synchronization
+  - File API: Import/export functionality
+
+  UI/UX Design Patterns
+
+  Color Scheme & Theming
+
+  - Primary Colors: Purple gradient (#667eea to #764ba2)
+  - Category Colors: Visual coding for different notice types
+  - Priority Indicators: Color-coded priority levels with animations
+  - Dark Mode: Complete dark theme with proper contrast ratios
+
+  Layout Patterns
+
+  - Horizontal Scroll: Modern card-based layout with smooth scrolling
+  - Mobile Bottom Controls: Fixed bottom navigation for mobile devices
+  - Glassmorphism: Translucent elements with backdrop blur
+  - Responsive Grid: Flexible grid system that adapts to screen size
+
+  Interaction Patterns
+
+  - Modal System: Overlay modals for forms and detailed views
+  - Toast Notifications: Non-intrusive feedback for user actions
+  - Hover Effects: Smooth transitions and visual feedback
+  - Keyboard Shortcuts: Power-user functionality with keyboard access
+
+  Security Considerations
+
+  - Client-side Only: Suitable for controlled environments
+  - Admin Authentication: Simple keyword-based system
+  - Data Validation: Input sanitization and validation
+  - No Sensitive Data: Designed for public notice information
+
+  Testing Approach
+
+  - Manual Testing: Cross-browser compatibility testing
+  - Responsive Testing: Multiple device and screen size testing
+  - Offline Testing: Verify offline functionality and sync recovery
+  - Performance Testing: Load testing with large datasets
+
+  Common Development Tasks
+
+  Adding New Features
+
+  1. Update the NoticeBoard class with new methods
+  2. Add corresponding UI elements and styles
+  3. Implement proper error handling and validation
+  4. Add user feedback with toast notifications
+  5. Test across all devices and browsers
+
+  Styling Updates
+
+  1. Use CSS variables for consistent theming
+  2. Maintain responsive design across all breakpoints
+  3. Follow existing glassmorphism and color patterns
+  4. Test both light and dark modes
+  5. Ensure accessibility compliance
+
+  Data Management
+
+  1. Update the notice data structure if needed
+  2. Handle data migration for existing users
+  3. Maintain backward compatibility
+  4. Test cloud sync and offline functionality
+  5. Validate data integrity
+
+  Deployment Notes
+
+  - Static Hosting: Can be deployed on any static hosting service
+  - No Server Required: Pure client-side application
+  - Environment Variables: JSONBin configuration in HTML file
+  - Browser Caching: Leverage browser caching for performance
+  - CDN Dependencies: Ensure external CDN availability

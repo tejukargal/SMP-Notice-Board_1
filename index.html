@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMP College Notice Board</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Kannada:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <h1 class="app-title">
+                        <i class="fas fa-graduation-cap"></i>
+                        SMP College Notice Board
+                    </h1>
+                    <div class="sync-status" id="syncStatus">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Syncing...</span>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <button class="btn btn-icon" id="themeToggle" title="Toggle Dark Mode">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button class="btn btn-icon" id="viewToggle" title="Toggle View Mode">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="btn btn-icon" id="exportBtn" title="Export Data">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn btn-icon" id="importBtn" title="Import Data">
+                        <i class="fas fa-upload"></i>
+                    </button>
+                    <button class="btn btn-icon" id="adminToggle" title="Admin Login">
+                        <i class="fas fa-user-shield"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Search and Filters -->
+        <div class="filters-section">
+            <div class="search-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search notices..." autocomplete="off">
+                    <button class="clear-search" id="clearSearch" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="filters-container">
+                <div class="filter-group">
+                    <label for="categoryFilter">Category:</label>
+                    <select id="categoryFilter">
+                        <option value="">All Categories</option>
+                        <option value="academic">Academic</option>
+                        <option value="events">Events</option>
+                        <option value="exams">Exams</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="scholarship">Scholarship</option>
+                        <option value="fee-payments">Fee Payments</option>
+                        <option value="admission">Admission</option>
+                        <option value="placement">Placement</option>
+                        <option value="library">Library</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sortBy">Sort by:</label>
+                    <select id="sortBy">
+                        <option value="date-desc">Latest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="priority">Priority</option>
+                        <option value="deadline">Deadline</option>
+                        <option value="title">Title A-Z</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="active-tags" id="activeTags"></div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="notices-container" id="noticesContainer">
+                <div class="empty-state" id="emptyState">
+                    <i class="fas fa-clipboard-list"></i>
+                    <h3>No notices found</h3>
+                    <p>Get started by creating your first notice or adjust your filters.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Floating Action Button -->
+        <button class="fab" id="addNoticeBtn" title="Add New Notice (Ctrl+N)">
+            <i class="fas fa-plus"></i>
+        </button>
+
+        <!-- Mobile Bottom Controls -->
+        <div class="mobile-controls">
+            <button class="mobile-btn" id="mobileSearch">
+                <i class="fas fa-search"></i>
+                <span>Search</span>
+            </button>
+            <button class="mobile-btn" id="mobileFilter">
+                <i class="fas fa-filter"></i>
+                <span>Filter</span>
+            </button>
+            <button class="mobile-btn" id="mobileAdd">
+                <i class="fas fa-plus"></i>
+                <span>Add</span>
+            </button>
+            <button class="mobile-btn" id="mobileSettings">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Notice Modal -->
+    <div class="modal" id="noticeModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Notice</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form class="modal-body" id="noticeForm">
+                <div class="form-group">
+                    <label for="noticeTitle">Title *</label>
+                    <input type="text" id="noticeTitle" required maxlength="100">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="noticeCategory">Category *</label>
+                        <select id="noticeCategory" required>
+                            <option value="">Select Category</option>
+                            <option value="academic">Academic</option>
+                            <option value="events">Events</option>
+                            <option value="exams">Exams</option>
+                            <option value="urgent">Urgent</option>
+                            <option value="scholarship">Scholarship</option>
+                            <option value="fee-payments">Fee Payments</option>
+                            <option value="admission">Admission</option>
+                            <option value="placement">Placement</option>
+                            <option value="library">Library</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="noticePriority">Priority</label>
+                        <select id="noticePriority">
+                            <option value="normal">Normal</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="noticeDate">Date *</label>
+                        <input type="date" id="noticeDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="noticeDeadline">Deadline (Optional)</label>
+                        <input type="date" id="noticeDeadline">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="noticeAuthor">Department/Author</label>
+                    <input type="text" id="noticeAuthor" placeholder="e.g., Computer Science Department">
+                </div>
+
+                <div class="form-group">
+                    <label for="noticeTags">Tags (Optional)</label>
+                    <input type="text" id="noticeTags" placeholder="Enter tags separated by commas">
+                    <small class="form-help">Add keywords to help organize and find this notice</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="noticeContent">Content *</label>
+                    <div id="noticeContent" class="quill-editor"></div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelNotice">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveNotice">Save Notice</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Login Modal -->
+    <div class="modal" id="adminModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Admin Login</h2>
+                <button class="modal-close" id="closeAdminModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="adminCode">Admin Code</label>
+                    <input type="password" id="adminCode" placeholder="Enter admin code">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelAdmin">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="loginAdmin">Login</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notice Details Modal -->
+    <div class="modal" id="detailsModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="detailsTitle"></h2>
+                <div class="modal-actions">
+                    <button class="btn btn-icon admin-only" id="editNoticeBtn" title="Edit Notice" style="display: none;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-icon admin-only" id="deleteNoticeBtn" title="Delete Notice" style="display: none;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button class="modal-close" id="closeDetailsModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="notice-meta" id="noticeMeta"></div>
+                <div class="notice-content-display" id="noticeContentDisplay"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal" id="exportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Export Data</h2>
+                <button class="modal-close" id="closeExportModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="export-options">
+                    <button class="export-btn" id="exportJSON">
+                        <i class="fas fa-file-code"></i>
+                        <span>Export as JSON</span>
+                    </button>
+                    <button class="export-btn" id="exportCSV">
+                        <i class="fas fa-file-csv"></i>
+                        <span>Export as CSV</span>
+                    </button>
+                    <button class="export-btn" id="exportPDF">
+                        <i class="fas fa-file-pdf"></i>
+                        <span>Export as PDF</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Hidden File Input for Import -->
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <script>
+        // NPoint Configuration
+        window.NPOINT_CONFIG = {
+            jsonId: '2aaf73e985100ffd556f',
+            baseUrl: 'https://api.npoint.io'
+        };
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>
