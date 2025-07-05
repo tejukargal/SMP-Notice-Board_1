@@ -25,7 +25,7 @@ class NoticeBoard {
         this.initializeCloudSync();
         this.applyTheme();
         this.render();
-        this.startSyncPolling();
+        // Removed automatic sync polling - only sync on page load and manual refresh
     }
 
     initializeElements() {
@@ -89,6 +89,13 @@ class NoticeBoard {
         this.importBtn.addEventListener('click', () => this.showImportDialog());
         this.adminToggle.addEventListener('click', () => this.showAdminModal());
 
+        // Manual sync when clicking on sync status
+        this.syncStatus.addEventListener('click', () => {
+            if (this.isOnline) {
+                this.syncWithCloud();
+            }
+        });
+
         // Search and filters
         this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
         this.clearSearch.addEventListener('click', () => this.clearSearchInput());
@@ -130,6 +137,14 @@ class NoticeBoard {
         // Online/offline detection
         window.addEventListener('online', () => this.handleOnlineStatus(true));
         window.addEventListener('offline', () => this.handleOnlineStatus(false));
+
+        // Manual sync button (optional - can be triggered by page refresh)
+        window.addEventListener('focus', () => {
+            // Sync when user returns to the tab (optional)
+            if (this.isOnline) {
+                this.syncWithCloud();
+            }
+        });
 
         // Click outside to close modals
         document.addEventListener('click', (e) => this.handleOutsideClick(e));
@@ -237,8 +252,10 @@ class NoticeBoard {
                 return this.isTiinyConfigValid();
             case 'jsonsilo':
                 return this.isJsonsiloConfigValid();
+            case 'jsonhost':
+                return this.isJsonhostConfigValid();
             case 'multi':
-                return this.isNPointConfigValid() || this.isTiinyConfigValid() || this.isJsonsiloConfigValid();
+                return this.isNPointConfigValid() || this.isTiinyConfigValid() || this.isJsonsiloConfigValid() || this.isJsonhostConfigValid();
             default:
                 return false;
         }
@@ -259,21 +276,13 @@ class NoticeBoard {
         return config && config.publicUrl && !config.publicUrl.includes('YOUR_JSONSILO_PUBLIC_URL');
     }
 
-    startSyncPolling() {
-        if (this.syncInterval) {
-            clearInterval(this.syncInterval);
-        }
-
-        this.syncInterval = setInterval(async () => {
-            if (this.isOnline) {
-                try {
-                    await this.syncWithCloud();
-                } catch (error) {
-                    console.error('Sync polling error:', error);
-                }
-            }
-        }, 5000);
+    isJsonhostConfigValid() {
+        const config = window.CLOUD_CONFIG.jsonhost;
+        return config && config.jsonUrl && !config.jsonUrl.includes('YOUR_JSONHOST_URL');
     }
+
+    // Removed automatic sync polling - sync only happens on page load and manual refresh
+    // startSyncPolling() method removed to prevent unnecessary API calls
 
     async syncWithCloud() {
         if (!window.CLOUD_CONFIG || !this.isOnline) {
@@ -294,6 +303,9 @@ class NoticeBoard {
                     break;
                 case 'jsonsilo':
                     await this.syncWithJsonsilo();
+                    break;
+                case 'jsonhost':
+                    await this.syncWithJsonhost();
                     break;
                 case 'multi':
                     await this.syncWithMultipleServices();
@@ -364,13 +376,49 @@ class NoticeBoard {
         }
     }
 
+    async syncWithJsonhost() {
+        const config = window.CLOUD_CONFIG.jsonhost;
+        if (!this.isJsonhostConfigValid()) {
+            throw new Error('JSONhost configuration invalid');
+        }
+
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        // Add edit key if configured for write capabilities
+        if (config.editKey) {
+            headers['X-Edit-Key'] = config.editKey;
+        }
+
+        const response = await fetch(config.jsonUrl, { headers });
+        
+        if (response.ok) {
+            const cloudData = await response.json();
+            this.processCloudData(cloudData, 'JSONhost (Read-only)');
+        } else {
+            throw new Error('Failed to fetch from JSONhost');
+        }
+    }
+
     async syncWithMultipleServices() {
         let syncedWithNPoint = false;
         let syncedWithTiiny = false;
         let syncedWithJsonsilo = false;
+        let syncedWithJsonhost = false;
 
-        // Try JSonsilo first (newest service)
-        if (this.isJsonsiloConfigValid()) {
+        // Try JSONhost first (newest service)
+        if (this.isJsonhostConfigValid()) {
+            try {
+                await this.syncWithJsonhost();
+                syncedWithJsonhost = true;
+            } catch (error) {
+                console.error('JSONhost sync failed:', error);
+            }
+        }
+
+        // Try JSonsilo as fallback
+        if (!syncedWithJsonhost && this.isJsonsiloConfigValid()) {
             try {
                 await this.syncWithJsonsilo();
                 syncedWithJsonsilo = true;
@@ -380,7 +428,7 @@ class NoticeBoard {
         }
 
         // Try NPoint as fallback
-        if (!syncedWithJsonsilo && this.isNPointConfigValid()) {
+        if (!syncedWithJsonhost && !syncedWithJsonsilo && this.isNPointConfigValid()) {
             try {
                 await this.syncWithNPoint();
                 syncedWithNPoint = true;
@@ -390,7 +438,7 @@ class NoticeBoard {
         }
 
         // Try Tiiny as final fallback
-        if (!syncedWithJsonsilo && !syncedWithNPoint && this.isTiinyConfigValid()) {
+        if (!syncedWithJsonhost && !syncedWithJsonsilo && !syncedWithNPoint && this.isTiinyConfigValid()) {
             try {
                 await this.syncWithTiiny();
                 syncedWithTiiny = true;
@@ -399,11 +447,12 @@ class NoticeBoard {
             }
         }
 
-        if (!syncedWithJsonsilo && !syncedWithNPoint && !syncedWithTiiny) {
+        if (!syncedWithJsonhost && !syncedWithJsonsilo && !syncedWithNPoint && !syncedWithTiiny) {
             throw new Error('All services failed');
         }
 
-        const serviceName = syncedWithJsonsilo ? 'JSonsilo' : 
+        const serviceName = syncedWithJsonhost ? 'JSONhost' :
+                           syncedWithJsonsilo ? 'JSonsilo' : 
                            syncedWithNPoint ? 'NPoint' : 'Tiiny';
         this.updateSyncStatus('synced', `Synced via ${serviceName}`);
     }
@@ -440,6 +489,9 @@ class NoticeBoard {
                 break;
             case 'jsonsilo':
                 console.log('JSonsilo is read-only in this implementation - data not uploaded to cloud');
+                break;
+            case 'jsonhost':
+                console.log('JSONhost is read-only in this implementation - data not uploaded to cloud');
                 break;
             default:
                 console.log('Read-only services - data not uploaded to cloud');

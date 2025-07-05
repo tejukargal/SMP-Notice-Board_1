@@ -293,13 +293,19 @@
     <script>
         // Cloud JSON Configuration - Choose one service
         window.CLOUD_CONFIG = {
-            // Service type: 'npoint', 'tiiny', 'jsonsilo', or 'multi' (fallback)
-            service: 'jsonsilo',
+            // Service type: 'npoint', 'tiiny', 'jsonsilo', 'jsonhost', or 'multi' (fallback)
+            service: 'jsonhost',
+            
+            // JSONhost.com Configuration
+            jsonhost: {
+                jsonUrl: 'https://jsonhost.com/json/f20bbd47f6d0960afd4b223442e0c2b8',
+                // Example: 'https://jsonhost.com/json/abc123'
+                editKey: null, // Optional for editing capabilities
+            },
             
             // JSonsilo.com Configuration
             jsonsilo: {
                 publicUrl: 'https://api.jsonsilo.com/public/2076022e-eafa-4826-a43b-5ee591b9792a',
-                // Example: 'https://api.jsonsilo.com/public/f21f20c9-3f3d-4ad5-8c95-9836868fe0e8'
                 apiKey: null, // Optional for private silos
             },
             

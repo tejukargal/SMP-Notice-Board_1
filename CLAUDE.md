@@ -182,8 +182,8 @@ boolean // Authentication state
 - **Minimize Reflow**: Use transforms over layout changes
 
 ### Network Performance
-- **Smart Polling**: 5-second intervals with caching
-- **Minimal API Calls**: Only sync when necessary
+- **Manual Sync**: Sync only on page load and manual refresh
+- **Minimal API Calls**: No automatic polling to reduce server load
 - **Offline Fallback**: Graceful degradation
 - **CDN Usage**: External resources from CDN
 

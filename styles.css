@@ -177,6 +177,13 @@ body {
   background: var(--surface-color);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sync-status:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
 }
 
 .sync-status.syncing {
