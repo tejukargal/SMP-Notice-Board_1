@@ -718,17 +718,39 @@ class NoticeBoard {
 
     async initializeGoogleDrive() {
         const config = window.CLOUD_CONFIG?.googledrive;
-        if (!config || !config.enabled || !config.apiKey) {
-            console.log('Google Drive not configured - attachments will use compression method');
+        
+        console.log('Google Drive configuration check:', {
+            configExists: !!config,
+            enabled: config?.enabled,
+            hasApiKey: !!config?.apiKey,
+            hasClientId: !!config?.clientId,
+            apiKeyStart: config?.apiKey?.substring(0, 10) + '...',
+            clientIdStart: config?.clientId?.substring(0, 15) + '...'
+        });
+
+        if (!config || !config.enabled || !config.apiKey || !config.clientId) {
+            console.log('Google Drive not properly configured - attachments will use compression method');
+            console.log('Required: enabled=true, apiKey, clientId');
             return;
         }
 
         try {
-            console.log('Initializing Google Drive API...');
-            await new Promise((resolve) => {
-                gapi.load('client:auth2', resolve);
+            console.log('Step 1: Loading Google API...');
+            
+            // Check if gapi is available
+            if (typeof gapi === 'undefined') {
+                throw new Error('Google API (gapi) not loaded. Check if Google API script is included.');
+            }
+
+            await new Promise((resolve, reject) => {
+                console.log('Step 2: Loading gapi client and auth2...');
+                gapi.load('client:auth2', {
+                    callback: resolve,
+                    onerror: reject
+                });
             });
 
+            console.log('Step 3: Initializing gapi client...');
             await gapi.client.init({
                 apiKey: config.apiKey,
                 clientId: config.clientId,
@@ -736,13 +758,42 @@ class NoticeBoard {
                 scope: 'https://www.googleapis.com/auth/drive.file'
             });
 
+            console.log('Step 4: Checking authentication status...');
+            const authInstance = gapi.auth2.getAuthInstance();
+            console.log('Auth instance created:', !!authInstance);
+
+            // Check if user needs to sign in
+            if (!authInstance.isSignedIn.get()) {
+                console.log('User not signed in, prompting for authentication...');
+                await authInstance.signIn();
+            }
+
+            console.log('Step 5: Creating/finding Drive folder...');
             this.googleDriveReady = true;
             await this.createOrFindDriveFolder();
-            console.log('Google Drive initialized successfully');
+            
+            console.log('✅ Google Drive initialized successfully');
             this.showToast('Google Drive storage ready', 'success');
         } catch (error) {
-            console.error('Failed to initialize Google Drive:', error);
-            this.showToast('Google Drive initialization failed', 'warning');
+            console.error('❌ Failed to initialize Google Drive:');
+            console.error('Error type:', error.constructor.name);
+            console.error('Error message:', error.message);
+            console.error('Full error:', error);
+            
+            // Provide specific error messages
+            let errorMessage = 'Google Drive initialization failed';
+            if (error.message.includes('API key')) {
+                errorMessage = 'Invalid Google Drive API key';
+            } else if (error.message.includes('client')) {
+                errorMessage = 'Invalid OAuth client ID';
+            } else if (error.message.includes('origin')) {
+                errorMessage = 'Domain not authorized for Google API';
+            } else if (error.message.includes('not loaded')) {
+                errorMessage = 'Google API script not loaded';
+            }
+            
+            this.showToast(errorMessage, 'error');
+            console.log('🔄 Falling back to compression method for attachments');
         }
     }
 
@@ -849,6 +900,69 @@ class NoticeBoard {
             console.error('Google Drive download error:', error);
             throw error;
         }
+    }
+
+    // Debug function to test Google Drive setup manually
+    async testGoogleDriveSetup() {
+        console.log('🔍 Manual Google Drive Setup Test');
+        console.log('================================');
+        
+        // Test 1: Check if Google API script is loaded
+        console.log('Test 1: Google API script loading');
+        if (typeof gapi === 'undefined') {
+            console.error('❌ Google API (gapi) not found. Check if the script is loaded.');
+            console.log('Expected script: https://apis.google.com/js/api.js');
+            return false;
+        }
+        console.log('✅ Google API script loaded');
+
+        // Test 2: Check configuration
+        const config = window.CLOUD_CONFIG?.googledrive;
+        console.log('Test 2: Configuration check');
+        console.log('Config:', {
+            exists: !!config,
+            enabled: config?.enabled,
+            apiKey: config?.apiKey ? config.apiKey.substring(0, 10) + '...' : 'MISSING',
+            clientId: config?.clientId ? config.clientId.substring(0, 15) + '...' : 'MISSING'
+        });
+
+        if (!config?.enabled || !config?.apiKey || !config?.clientId) {
+            console.error('❌ Configuration incomplete');
+            return false;
+        }
+        console.log('✅ Configuration complete');
+
+        // Test 3: Test API key validity
+        console.log('Test 3: Testing API key...');
+        try {
+            const testResponse = await fetch(`https://www.googleapis.com/drive/v3/about?fields=user&key=${config.apiKey}`);
+            if (!testResponse.ok) {
+                console.error('❌ API key test failed:', testResponse.status, testResponse.statusText);
+                if (testResponse.status === 400) {
+                    console.log('💡 This is normal - API key needs OAuth for user info');
+                }
+                return false;
+            }
+            console.log('✅ API key appears valid');
+        } catch (error) {
+            console.log('⚠️  API key test inconclusive (CORS/network):', error.message);
+        }
+
+        // Test 4: Check current domain
+        console.log('Test 4: Current domain check');
+        console.log('Current origin:', window.location.origin);
+        console.log('Current protocol:', window.location.protocol);
+        
+        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+            console.warn('⚠️  OAuth requires HTTPS in production');
+        }
+
+        console.log('🔍 Manual test completed. Check Google Cloud Console:');
+        console.log('1. Verify API key restrictions');
+        console.log('2. Check OAuth client authorized origins');
+        console.log('3. Ensure Google Drive API is enabled');
+        
+        return true;
     }
 
     updateSyncStatus(status, message) {
@@ -2086,4 +2200,8 @@ class NoticeBoard {
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.noticeBoard = new NoticeBoard();
+    
+    // Make test function globally available for debugging
+    window.testGoogleDrive = () => window.noticeBoard.testGoogleDriveSetup();
+    console.log('💡 To test Google Drive setup, run: testGoogleDrive()');
 });
