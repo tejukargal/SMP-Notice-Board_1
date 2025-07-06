@@ -674,7 +674,7 @@ body {
 /* Notice Cards */
 .notice-card {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 2px solid #e5e7eb;
   border-radius: var(--radius-lg);
   transition: all var(--transition-base);
   cursor: pointer;
@@ -684,9 +684,36 @@ body {
 }
 
 [data-theme="dark"] .notice-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #1f2937;
+  border: 2px solid #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Priority-based colored borders */
+.notice-card:has(.priority-normal) {
+  border-color: #64748b;
+}
+
+.notice-card:has(.priority-high) {
+  border-color: #f59e0b;
+}
+
+.notice-card:has(.priority-critical) {
+  border-color: #ef4444;
+  border-width: 3px;
+}
+
+[data-theme="dark"] .notice-card:has(.priority-normal) {
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .notice-card:has(.priority-high) {
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .notice-card:has(.priority-critical) {
+  border-color: #ef4444;
+  border-width: 3px;
 }
 
 .notice-card:hover {
@@ -703,8 +730,8 @@ body {
   padding: var(--spacing-lg);
   color: white;
   position: relative;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  margin: 0;
+  border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
+  margin: -2px -2px 0 -2px;
 }
 
 .notice-card-header.priority-normal {
@@ -719,6 +746,39 @@ body {
 .notice-card-header.priority-critical {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   animation: glow-critical 2s ease-in-out infinite alternate;
+}
+
+/* Priority-based card border colors using class targeting */
+.notice-card:has(.notice-card-header.priority-normal),
+.priority-normal-card {
+  border-color: #64748b;
+}
+
+.notice-card:has(.notice-card-header.priority-high),
+.priority-high-card {
+  border-color: #f59e0b;
+}
+
+.notice-card:has(.notice-card-header.priority-critical),
+.priority-critical-card {
+  border-color: #ef4444;
+  border-width: 3px;
+}
+
+[data-theme="dark"] .notice-card:has(.notice-card-header.priority-normal),
+[data-theme="dark"] .priority-normal-card {
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .notice-card:has(.notice-card-header.priority-high),
+[data-theme="dark"] .priority-high-card {
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .notice-card:has(.notice-card-header.priority-critical),
+[data-theme="dark"] .priority-critical-card {
+  border-color: #ef4444;
+  border-width: 3px;
 }
 
 @keyframes glow-high {
@@ -775,13 +835,21 @@ body {
   padding: var(--spacing-lg);
   background: white;
   color: #374151;
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  margin: 0;
+  border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
+  margin: 0 -2px -2px -2px;
 }
 
 [data-theme="dark"] .notice-card-body {
-  background: white;
-  color: #374151;
+  background: #1f2937;
+  color: #f3f4f6;
+}
+
+[data-theme="dark"] .notice-card-body .notice-content {
+  color: #d1d5db;
+}
+
+[data-theme="dark"] .notice-card-body .meta-item {
+  color: #9ca3af;
 }
 
 @keyframes pulse {
@@ -986,6 +1054,18 @@ body {
   color: white;
   border-color: var(--primary-color);
   transform: translateY(-1px);
+}
+
+[data-theme="dark"] .notice-tag {
+  background: #374151;
+  color: #d1d5db;
+  border-color: #4b5563;
+}
+
+[data-theme="dark"] .notice-tag:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
 }
 
 .notice-actions {
@@ -1586,12 +1666,14 @@ body.admin-mode .fab {
   
   /* Ensure seamless connection on mobile */
   .notice-card-header {
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
+    margin: -2px -2px 0 -2px;
     padding: var(--spacing-md);
   }
   
   .notice-card-body {
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
+    margin: 0 -2px -2px -2px;
     padding: var(--spacing-md);
   }
 }
@@ -1619,10 +1701,14 @@ body.admin-mode .fab {
   
   /* Maintain seamless connection on very small screens */
   .notice-card-header {
+    border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
+    margin: -2px -2px 0 -2px;
     padding: var(--spacing-sm);
   }
   
   .notice-card-body {
+    border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
+    margin: 0 -2px -2px -2px;
     padding: var(--spacing-sm);
   }
   

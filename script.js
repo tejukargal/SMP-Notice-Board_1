@@ -1201,7 +1201,7 @@ class NoticeBoard {
         const attachmentsHTML = this.createAttachmentsDisplay(notice.attachments);
 
         return `
-            <div class="notice-card" data-notice-id="${notice.id}">
+            <div class="notice-card priority-${notice.priority}-card" data-notice-id="${notice.id}">
                 <div class="notice-card-header ${priorityClass}">
                     <div class="header-top">
                         <h3 class="notice-title">${notice.title}</h3>
