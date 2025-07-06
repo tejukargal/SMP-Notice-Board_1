@@ -730,8 +730,13 @@ body {
   padding: var(--spacing-lg);
   color: white;
   position: relative;
-  border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
-  margin: -2px -2px 0 -2px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  margin: 0;
+  /* Extend to full card width by using absolute positioning approach */
+  width: calc(100% + 4px);
+  margin-left: -2px;
+  margin-top: -2px;
+  margin-right: -2px;
 }
 
 .notice-card-header.priority-normal {
@@ -835,8 +840,12 @@ body {
   padding: var(--spacing-lg);
   background: white;
   color: #374151;
-  border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
-  margin: 0 -2px -2px -2px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  margin: 0;
+  width: calc(100% + 4px);
+  margin-left: -2px;
+  margin-right: -2px;
+  margin-bottom: -2px;
 }
 
 [data-theme="dark"] .notice-card-body {
@@ -1666,15 +1675,21 @@ body.admin-mode .fab {
   
   /* Ensure seamless connection on mobile */
   .notice-card-header {
-    border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
-    margin: -2px -2px 0 -2px;
     padding: var(--spacing-md);
+    width: calc(100% + 4px);
+    margin-left: -2px;
+    margin-top: -2px;
+    margin-right: -2px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
   
   .notice-card-body {
-    border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
-    margin: 0 -2px -2px -2px;
     padding: var(--spacing-md);
+    width: calc(100% + 4px);
+    margin-left: -2px;
+    margin-right: -2px;
+    margin-bottom: -2px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
 }
 
@@ -1701,15 +1716,21 @@ body.admin-mode .fab {
   
   /* Maintain seamless connection on very small screens */
   .notice-card-header {
-    border-radius: calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px) 0 0;
-    margin: -2px -2px 0 -2px;
     padding: var(--spacing-sm);
+    width: calc(100% + 4px);
+    margin-left: -2px;
+    margin-top: -2px;
+    margin-right: -2px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
   
   .notice-card-body {
-    border-radius: 0 0 calc(var(--radius-lg) - 2px) calc(var(--radius-lg) - 2px);
-    margin: 0 -2px -2px -2px;
     padding: var(--spacing-sm);
+    width: calc(100% + 4px);
+    margin-left: -2px;
+    margin-right: -2px;
+    margin-bottom: -2px;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
   
   .category-filter-section {
