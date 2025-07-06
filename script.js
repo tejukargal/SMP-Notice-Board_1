@@ -554,7 +554,19 @@ class NoticeBoard {
         const cloudSize = JSON.stringify(data).length;
         const attachmentCount = this.notices.reduce((count, notice) => 
             count + (notice.attachments ? notice.attachments.length : 0), 0);
-        console.log(`Original size: ${(originalSize/1024/1024).toFixed(2)}MB, Cloud size: ${(cloudSize/1024/1024).toFixed(2)}MB, Attachments: ${attachmentCount}`);
+        const jsonhostLimit = 101 * 1024; // 101KB limit
+        
+        console.log(`📊 Payload Analysis:`);
+        console.log(`Original size: ${(originalSize/1024).toFixed(1)}KB`);
+        console.log(`Cloud size: ${(cloudSize/1024).toFixed(1)}KB`);
+        console.log(`JSONhost limit: ${(jsonhostLimit/1024).toFixed(1)}KB`);
+        console.log(`Attachments: ${attachmentCount}`);
+        console.log(`Within limit: ${cloudSize <= jsonhostLimit ? '✅' : '❌'}`);
+        
+        if (cloudSize > jsonhostLimit) {
+            console.warn(`⚠️ Payload too large for JSONhost (${(cloudSize/1024).toFixed(1)}KB > ${(jsonhostLimit/1024).toFixed(1)}KB)`);
+            this.showToast(`Upload too large (${(cloudSize/1024).toFixed(1)}KB). Try smaller files or enable Google Drive.`, 'warning');
+        }
 
         const jsonUrl = `${config.baseUrl}${config.jsonId}`;
         console.log('Uploading data to JSONhost:', jsonUrl);
@@ -618,40 +630,56 @@ class NoticeBoard {
                 // Try to upload to Google Drive if available
                 if (this.googleDriveReady && this.googleDriveFolderId) {
                     try {
-                        console.log(`Uploading ${attachment.name} to Google Drive...`);
+                        console.log(`✅ Google Drive ready, uploading ${attachment.name} to Google Drive...`);
                         const driveFile = await this.uploadFileToGoogleDrive(attachment, attachment.name);
+                        console.log(`✅ Successfully uploaded ${attachment.name} to Google Drive`);
                         return driveFile;
                     } catch (error) {
-                        console.log(`Google Drive upload failed for ${attachment.name}, falling back to compression`);
+                        console.error(`❌ Google Drive upload failed for ${attachment.name}:`, error);
+                        console.log(`🔄 Falling back to compression for ${attachment.name}`);
                     }
+                } else {
+                    console.log(`⚠️ Google Drive not ready (ready: ${this.googleDriveReady}, folder: ${!!this.googleDriveFolderId}), using compression for ${attachment.name}`);
                 }
 
                 // Fallback to compression method if Google Drive not available
-                // Skip if attachment is already small enough
-                if (attachment.size < 500000) { // 500KB
+                // For files under 50KB, include directly
+                if (attachment.size < 51200) { // 50KB
+                    console.log(`Small file ${attachment.name}, including directly`);
                     return attachment;
                 }
 
                 // Compress images
                 if (attachment.type.startsWith('image/')) {
                     console.log(`Compressing image: ${attachment.name} (${this.formatFileSize(attachment.size)})`);
-                    return await this.compressImage(attachment);
+                    const compressed = await this.compressImage(attachment);
+                    
+                    // If compressed image is still too large for JSONhost, create placeholder
+                    if (compressed.size > 80000) { // 80KB limit for JSONhost safety
+                        console.log(`Compressed image still too large (${this.formatFileSize(compressed.size)}), creating placeholder`);
+                        return {
+                            name: attachment.name,
+                            type: attachment.type,
+                            size: attachment.size,
+                            isPlaceholder: true,
+                            originalSize: attachment.size,
+                            note: 'File too large for cloud sync - available locally only'
+                        };
+                    }
+                    
+                    return compressed;
                 }
 
-                // For non-image files larger than 1MB, create a placeholder
-                if (attachment.size > 1048576) { // 1MB
-                    console.log(`Large file detected: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating placeholder`);
-                    return {
-                        name: attachment.name,
-                        type: attachment.type,
-                        size: attachment.size,
-                        isPlaceholder: true,
-                        originalSize: attachment.size,
-                        note: 'File too large for cloud sync - available locally only'
-                    };
-                }
-
-                return attachment;
+                // For all other files larger than 50KB, create a placeholder
+                console.log(`Large file detected: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating placeholder`);
+                return {
+                    name: attachment.name,
+                    type: attachment.type,
+                    size: attachment.size,
+                    isPlaceholder: true,
+                    originalSize: attachment.size,
+                    note: 'File too large for cloud sync - available locally only'
+                };
             }));
 
             return { ...notice, attachments: optimizedAttachments };
@@ -685,14 +713,24 @@ class NoticeBoard {
                 // Draw and compress
                 ctx.drawImage(img, 0, 0, width, height);
                 
-                // Try different quality levels until we get a reasonable size
+                // Try different quality levels until we get a reasonable size for JSONhost
                 let quality = 0.7;
                 let compressedData;
                 
                 do {
-                    compressedData = canvas.toDataURL(attachment.type, quality);
+                    compressedData = canvas.toDataURL('image/jpeg', quality); // Force JPEG for better compression
                     quality -= 0.1;
-                } while (compressedData.length > 800000 && quality > 0.1); // Target ~800KB max
+                } while (compressedData.length > 100000 && quality > 0.1); // Target ~100KB for JSONhost
+                
+                // If still too large, try smaller dimensions
+                if (compressedData.length > 100000 && quality <= 0.1) {
+                    const smallerWidth = Math.floor(width * 0.7);
+                    const smallerHeight = Math.floor(height * 0.7);
+                    canvas.width = smallerWidth;
+                    canvas.height = smallerHeight;
+                    ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight);
+                    compressedData = canvas.toDataURL('image/jpeg', 0.5);
+                }
 
                 const compressedSize = Math.round(compressedData.length * 0.75); // Approximate actual size
                 
