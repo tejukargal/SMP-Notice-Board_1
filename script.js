@@ -37,9 +37,6 @@ class NoticeBoard {
         // Header elements
         this.syncStatus = document.getElementById('syncStatus');
         this.themeToggle = document.getElementById('themeToggle');
-        this.viewToggle = document.getElementById('viewToggle');
-        this.exportBtn = document.getElementById('exportBtn');
-        this.importBtn = document.getElementById('importBtn');
         this.adminToggle = document.getElementById('adminToggle');
 
         // Filter elements
@@ -83,11 +80,8 @@ class NoticeBoard {
     }
 
     attachEventListeners() {
-        // Header controls
+        // Bottom controls (moved from header)
         this.themeToggle.addEventListener('click', () => this.toggleTheme());
-        this.viewToggle.addEventListener('click', () => this.toggleViewMode());
-        this.exportBtn.addEventListener('click', () => this.showExportModal());
-        this.importBtn.addEventListener('click', () => this.showImportDialog());
         // Admin toggle event listener handled in updateAdminUI()
 
         // Manual sync when clicking on sync status
@@ -502,6 +496,12 @@ class NoticeBoard {
                 service: "jsonhost"
             }
         };
+
+        // Log data size and attachment info for debugging
+        const dataSize = JSON.stringify(data).length;
+        const attachmentCount = this.notices.reduce((count, notice) => 
+            count + (notice.attachments ? notice.attachments.length : 0), 0);
+        console.log(`Upload data size: ${dataSize} bytes, Attachments: ${attachmentCount}`);
 
         const jsonUrl = `${config.baseUrl}${config.jsonId}`;
         console.log('Uploading data to JSONhost:', jsonUrl);
@@ -1009,6 +1009,7 @@ class NoticeBoard {
         };
 
         console.log('Generated notice object:', notice);
+        console.log('Notice has attachments:', notice.attachments ? notice.attachments.length : 0);
         
         this.notices.unshift(notice);
         console.log('Updated notices array:', this.notices);
@@ -1490,7 +1491,9 @@ class NoticeBoard {
     }
 
     createAttachmentsDisplay(attachments) {
+        console.log('Creating attachments display for:', attachments);
         if (!attachments || attachments.length === 0) {
+            console.log('No attachments to display');
             return '';
         }
         

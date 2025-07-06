@@ -963,9 +963,9 @@ body {
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
-/* Mobile Controls */
+/* Mobile Controls - Now Bottom Settings Bar */
 .mobile-controls {
-  display: none;
+  display: flex;
   position: fixed;
   bottom: 0;
   left: 0;
@@ -974,6 +974,7 @@ body {
   border-top: 1px solid var(--border-color);
   padding: var(--spacing-sm);
   z-index: 100;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .mobile-btn {
