@@ -1451,21 +1451,40 @@ class NoticeBoard {
     }
 
     processContentWithURLs(content) {
-        // First, process the HTML content to detect and link URLs
+        // First, process the HTML content to detect and extract URLs
         let processedContent = content;
+        const urls = [];
         
         // URL regex pattern to detect various URL formats
         const urlRegex = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+|[^\s<>"]+\.[a-z]{2,}(?:\/[^\s<>"]*)?)/gi;
         
-        // Replace URLs with clickable links
+        // Extract URLs and replace them with placeholders
         processedContent = processedContent.replace(urlRegex, (url) => {
             let href = url;
             // Add https:// if missing
             if (!url.startsWith('http://') && !url.startsWith('https://')) {
                 href = 'https://' + url;
             }
-            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="notice-link">${url}</a>`;
+            urls.push({ original: url, href: href });
+            return `<span class="url-placeholder">${url}</span>`;
         });
+        
+        // If URLs were found, create a separate URLs section
+        if (urls.length > 0) {
+            const urlsSection = `
+                <div class="notice-urls">
+                    ${urls.map(urlData => 
+                        `<a href="${urlData.href}" target="_blank" rel="noopener noreferrer" class="notice-link">
+                            <i class="fas fa-external-link-alt"></i> ${urlData.original}
+                        </a>`
+                    ).join('')}
+                </div>
+            `;
+            
+            // Remove placeholder spans and add URLs section at the end
+            processedContent = processedContent.replace(/<span class="url-placeholder">.*?<\/span>/g, '');
+            processedContent += urlsSection;
+        }
         
         return processedContent;
     }
