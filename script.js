@@ -51,7 +51,6 @@ class NoticeBoard {
         // Mobile controls
         this.mobileFilter = document.getElementById('mobileFilter');
         this.mobileAdd = document.getElementById('mobileAdd');
-        this.mobileSettings = document.getElementById('mobileSettings');
 
         // Modals
         this.noticeModal = document.getElementById('noticeModal');
@@ -111,7 +110,6 @@ class NoticeBoard {
 
         // Mobile controls
         this.mobileFilter.addEventListener('click', () => this.showMobileFilters());
-        this.mobileSettings.addEventListener('click', () => this.showMobileSettings());
 
         // Form submission
         this.noticeForm.addEventListener('submit', (e) => this.handleFormSubmit(e));
@@ -1378,11 +1376,6 @@ class NoticeBoard {
     showMobileFilters() {
         // Toggle mobile filter panel (implement as needed)
         this.mobileFilter.classList.toggle('active');
-    }
-
-    showMobileSettings() {
-        // Show mobile settings (implement as needed)
-        this.showExportModal();
     }
 
     handleOutsideClick(e) {
