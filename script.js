@@ -88,7 +88,7 @@ class NoticeBoard {
         this.viewToggle.addEventListener('click', () => this.toggleViewMode());
         this.exportBtn.addEventListener('click', () => this.showExportModal());
         this.importBtn.addEventListener('click', () => this.showImportDialog());
-        this.adminToggle.addEventListener('click', () => this.showAdminModal());
+        // Admin toggle event listener handled in updateAdminUI()
 
         // Manual sync when clicking on sync status
         this.syncStatus.addEventListener('click', () => {
@@ -245,8 +245,16 @@ class NoticeBoard {
             : '<i class="fas fa-user-shield"></i>';
         this.adminToggle.title = this.isAdmin ? 'Logout Admin' : 'Admin Login';
         
+        // Remove any existing event listeners by cloning the element
+        const newAdminToggle = this.adminToggle.cloneNode(true);
+        this.adminToggle.parentNode.replaceChild(newAdminToggle, this.adminToggle);
+        this.adminToggle = newAdminToggle;
+        
+        // Add the appropriate event listener
         if (this.isAdmin) {
             this.adminToggle.addEventListener('click', () => this.logout());
+        } else {
+            this.adminToggle.addEventListener('click', () => this.showAdminModal());
         }
     }
 
@@ -726,6 +734,12 @@ class NoticeBoard {
                 <i class="fas fa-clock"></i> ${deadlineInfo.text}
             </div>
         ` : '';
+        
+        // Process content with URL detection
+        const processedContent = this.processContentWithURLs(notice.content);
+        
+        // Create attachments display
+        const attachmentsHTML = this.createAttachmentsDisplay(notice.attachments);
 
         return `
             <div class="notice-card ${priorityClass}" data-notice-id="${notice.id}">
@@ -750,8 +764,9 @@ class NoticeBoard {
                     ` : ''}
                 </div>
                 <div class="notice-content">
-                    ${this.stripHTML(notice.content).substring(0, 150)}${this.stripHTML(notice.content).length > 150 ? '...' : ''}
+                    ${processedContent}
                 </div>
+                ${attachmentsHTML}
                 <div class="notice-footer">
                     <div class="notice-tags">${tagsHTML}</div>
                     ${adminActions}
@@ -1129,6 +1144,7 @@ class NoticeBoard {
             this.isAdmin = true;
             sessionStorage.setItem('isAdmin', 'true');
             this.updateAdminUI();
+            this.render(); // Re-render notices to show admin controls
             this.hideAdminModal();
             this.showToast('Admin login successful', 'success');
         } else {
@@ -1142,6 +1158,7 @@ class NoticeBoard {
         this.isAdmin = false;
         sessionStorage.removeItem('isAdmin');
         this.updateAdminUI();
+        this.render(); // Re-render notices to hide admin controls
         this.showToast('Admin logout successful', 'info');
     }
 
@@ -1431,6 +1448,75 @@ class NoticeBoard {
         const temp = document.createElement('div');
         temp.innerHTML = html;
         return temp.textContent || temp.innerText || '';
+    }
+
+    processContentWithURLs(content) {
+        // First, process the HTML content to detect and link URLs
+        let processedContent = content;
+        
+        // URL regex pattern to detect various URL formats
+        const urlRegex = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+|[^\s<>"]+\.[a-z]{2,}(?:\/[^\s<>"]*)?)/gi;
+        
+        // Replace URLs with clickable links
+        processedContent = processedContent.replace(urlRegex, (url) => {
+            let href = url;
+            // Add https:// if missing
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                href = 'https://' + url;
+            }
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="notice-link">${url}</a>`;
+        });
+        
+        return processedContent;
+    }
+
+    createAttachmentsDisplay(attachments) {
+        if (!attachments || attachments.length === 0) {
+            return '';
+        }
+        
+        const attachmentsHTML = attachments.map(attachment => {
+            const icon = this.getFileIcon(attachment.type);
+            const size = this.formatFileSize(attachment.size);
+            
+            if (attachment.type.startsWith('image/')) {
+                // Display images inline
+                return `
+                    <div class="notice-attachment image-attachment">
+                        <img src="${attachment.data}" alt="${attachment.name}" class="attachment-image" loading="lazy">
+                        <div class="attachment-info">
+                            <span class="attachment-name">${attachment.name}</span>
+                            <span class="attachment-size">${size}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Display other files as downloadable links
+                return `
+                    <div class="notice-attachment file-attachment">
+                        <i class="attachment-icon ${icon}"></i>
+                        <div class="attachment-info">
+                            <a href="${attachment.data}" download="${attachment.name}" class="attachment-link">
+                                <span class="attachment-name">${attachment.name}</span>
+                                <span class="attachment-size">${size}</span>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+        }).join('');
+        
+        return `
+            <div class="notice-attachments">
+                <div class="attachments-header">
+                    <i class="fas fa-paperclip"></i>
+                    <span>Attachments (${attachments.length})</span>
+                </div>
+                <div class="attachments-list">
+                    ${attachmentsHTML}
+                </div>
+            </div>
+        `;
     }
 
     showLoading() {
