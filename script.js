@@ -2,8 +2,7 @@ class NoticeBoard {
     constructor() {
         this.notices = [];
         this.filteredNotices = [];
-        this.currentFilter = '';
-        this.currentSearch = '';
+        this.currentFilter = 'all';
         this.activeTags = new Set();
         this.sortBy = 'date-desc';
         this.viewMode = 'grid';
@@ -12,8 +11,14 @@ class NoticeBoard {
         this.syncInterval = null;
         this.lastSyncTime = null;
         this.isOnline = navigator.onLine;
+        this.cloudWriteEnabled = true;
+        this.currentTags = [];
+        this.currentAttachments = [];
+        this.maxFileSize = 5 * 1024 * 1024; // 5MB
+        this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
         this.init();
+        this.initializeSubHeader();
     }
 
     init() {
@@ -37,12 +42,9 @@ class NoticeBoard {
         this.importBtn = document.getElementById('importBtn');
         this.adminToggle = document.getElementById('adminToggle');
 
-        // Search and filter elements
-        this.searchInput = document.getElementById('searchInput');
-        this.clearSearch = document.getElementById('clearSearch');
-        this.categoryFilter = document.getElementById('categoryFilter');
-        this.sortBy = document.getElementById('sortBy');
-        this.activeTags = document.getElementById('activeTags');
+        // Filter elements
+        this.filterButtons = document.querySelectorAll('.filter-btn');
+        this.activeTagsContainer = document.getElementById('activeTags'); // May be null if not in HTML
 
         // Main content
         this.noticesContainer = document.getElementById('noticesContainer');
@@ -50,7 +52,6 @@ class NoticeBoard {
         this.addNoticeBtn = document.getElementById('addNoticeBtn');
 
         // Mobile controls
-        this.mobileSearch = document.getElementById('mobileSearch');
         this.mobileFilter = document.getElementById('mobileFilter');
         this.mobileAdd = document.getElementById('mobileAdd');
         this.mobileSettings = document.getElementById('mobileSettings');
@@ -96,18 +97,25 @@ class NoticeBoard {
             }
         });
 
-        // Search and filters
-        this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
-        this.clearSearch.addEventListener('click', () => this.clearSearchInput());
-        this.categoryFilter.addEventListener('change', (e) => this.handleCategoryFilter(e.target.value));
-        this.sortBy.addEventListener('change', (e) => this.handleSortChange(e.target.value));
+        // Debug: Add double-click to test JSONhost URL directly
+        this.syncStatus.addEventListener('dblclick', () => {
+            this.testJsonhostURL();
+        });
+
+        // Category filters
+        this.filterButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const category = btn.dataset.category;
+                this.handleCategoryFilter(category);
+                this.updateActiveFilterButton(btn);
+            });
+        });
 
         // Add notice
         this.addNoticeBtn.addEventListener('click', () => this.showNoticeModal());
         this.mobileAdd.addEventListener('click', () => this.showNoticeModal());
 
         // Mobile controls
-        this.mobileSearch.addEventListener('click', () => this.focusSearch());
         this.mobileFilter.addEventListener('click', () => this.showMobileFilters());
         this.mobileSettings.addEventListener('click', () => this.showMobileSettings());
 
@@ -125,6 +133,18 @@ class NoticeBoard {
 
         // Import file
         this.fileInput.addEventListener('change', (e) => this.handleFileImport(e));
+        
+        // Enhanced tags and file attachments
+        const tagInput = document.getElementById('tagInput');
+        if (tagInput) {
+            tagInput.addEventListener('keypress', (e) => this.handleTagInput(e));
+        }
+        
+        const fileAttachments = document.getElementById('noticeAttachments');
+        if (fileAttachments) {
+            fileAttachments.addEventListener('change', (e) => this.handleFileSelection(e));
+            this.setupFileDragDrop();
+        }
 
         // Export options
         document.getElementById('exportJSON').addEventListener('click', () => this.exportData('json'));
@@ -204,7 +224,9 @@ class NoticeBoard {
 
     saveToStorage() {
         try {
+            console.log('Saving to localStorage, notices count:', this.notices.length);
             localStorage.setItem('college-notices', JSON.stringify(this.notices));
+            console.log('Successfully saved to localStorage');
         } catch (error) {
             console.error('Error saving to localStorage:', error);
             this.showToast('Error saving notices locally', 'error');
@@ -229,8 +251,15 @@ class NoticeBoard {
     }
 
     async initializeCloudSync() {
-        if (!window.CLOUD_CONFIG || !this.isCloudConfigValid()) {
+        if (!window.CLOUD_CONFIG) {
+            console.error('CLOUD_CONFIG not found');
             this.updateSyncStatus('offline', 'Cloud sync not configured');
+            return;
+        }
+
+        if (!this.isCloudConfigValid()) {
+            console.error('Cloud config validation failed:', window.CLOUD_CONFIG);
+            this.updateSyncStatus('offline', 'Cloud sync configuration invalid');
             return;
         }
 
@@ -238,7 +267,7 @@ class NoticeBoard {
             await this.syncWithCloud();
         } catch (error) {
             console.error('Initial cloud sync failed:', error);
-            this.updateSyncStatus('error', 'Cloud sync failed');
+            this.updateSyncStatus('error', `Sync failed: ${error.message}`);
         }
     }
 
@@ -278,7 +307,9 @@ class NoticeBoard {
 
     isJsonhostConfigValid() {
         const config = window.CLOUD_CONFIG.jsonhost;
-        return config && config.jsonUrl && !config.jsonUrl.includes('YOUR_JSONHOST_URL');
+        return config && config.jsonId && config.apiToken && 
+               !config.jsonId.includes('YOUR_JSON_ID') && 
+               !config.apiToken.includes('YOUR_API_TOKEN');
     }
 
     // Removed automatic sync polling - sync only happens on page load and manual refresh
@@ -315,160 +346,106 @@ class NoticeBoard {
             }
         } catch (error) {
             console.error('Cloud sync error:', error);
-            this.updateSyncStatus('error', 'Sync failed');
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                config: window.CLOUD_CONFIG
+            });
+            this.updateSyncStatus('error', `Sync failed: ${error.message}`);
         }
     }
 
-    async syncWithNPoint() {
-        const config = window.CLOUD_CONFIG.npoint;
-        if (!this.isNPointConfigValid()) {
-            throw new Error('NPoint configuration invalid');
-        }
-
-        const response = await fetch(`${config.baseUrl}/${config.jsonId}`);
-        
-        if (response.ok) {
-            const cloudData = await response.json();
-            this.processCloudData(cloudData, 'NPoint (Read-only)');
-        } else {
-            throw new Error('Failed to fetch from NPoint');
-        }
-    }
-
-    async syncWithTiiny() {
-        const config = window.CLOUD_CONFIG.tiiny;
-        if (!this.isTiinyConfigValid()) {
-            throw new Error('Tiiny configuration invalid');
-        }
-
-        const response = await fetch(config.jsonUrl);
-        
-        if (response.ok) {
-            const cloudData = await response.json();
-            this.processCloudData(cloudData, 'Tiiny.host (Read-only)');
-        } else {
-            throw new Error('Failed to fetch from Tiiny.host');
-        }
-    }
-
-    async syncWithJsonsilo() {
-        const config = window.CLOUD_CONFIG.jsonsilo;
-        if (!this.isJsonsiloConfigValid()) {
-            throw new Error('JSonsilo configuration invalid');
-        }
-
-        const headers = {
-            'Content-Type': 'application/json'
-        };
-
-        // Add API key if configured for private silos
-        if (config.apiKey) {
-            headers['Authorization'] = `Bearer ${config.apiKey}`;
-        }
-
-        const response = await fetch(config.publicUrl, { headers });
-        
-        if (response.ok) {
-            const cloudData = await response.json();
-            this.processCloudData(cloudData, 'JSonsilo (Read-only)');
-        } else {
-            throw new Error('Failed to fetch from JSonsilo');
-        }
-    }
 
     async syncWithJsonhost() {
         const config = window.CLOUD_CONFIG.jsonhost;
         if (!this.isJsonhostConfigValid()) {
-            throw new Error('JSONhost configuration invalid');
+            console.error('JSONhost config validation failed:', config);
+            throw new Error('JSONhost configuration invalid - missing jsonId or apiToken');
         }
+
+        const jsonUrl = `${config.baseUrl}${config.jsonId}`;
+        console.log('Attempting to sync with JSONhost:', jsonUrl);
+        console.log('JSONhost config:', {
+            jsonId: config.jsonId,
+            apiToken: config.apiToken ? '[PRESENT]' : '[MISSING]',
+            baseUrl: config.baseUrl
+        });
 
         const headers = {
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
         };
 
-        // Add edit key if configured for write capabilities
-        if (config.editKey) {
-            headers['X-Edit-Key'] = config.editKey;
-        }
+        try {
+            const response = await fetch(jsonUrl, {
+                method: 'GET',
+                headers: headers,
+                mode: 'cors',
+                cache: 'no-cache'
+            });
 
-        const response = await fetch(config.jsonUrl, { headers });
-        
-        if (response.ok) {
-            const cloudData = await response.json();
-            this.processCloudData(cloudData, 'JSONhost (Read-only)');
-        } else {
-            throw new Error('Failed to fetch from JSONhost');
+            console.log('JSONhost response status:', response.status);
+            
+            if (response.ok) {
+                const cloudData = await response.json();
+                console.log('JSONhost data received:', cloudData);
+                
+                const statusText = 'JSONhost (Read/Write)';
+                this.processCloudData(cloudData, statusText);
+            } else if (response.status === 404) {
+                // JSON file doesn't exist yet, create initial structure
+                console.log('JSONhost file not found, will create on first save');
+                this.updateSyncStatus('synced', 'JSONhost (Ready)');
+            } else {
+                const errorText = await response.text();
+                console.error('JSONhost error response:', errorText);
+                throw new Error(`JSONhost returned ${response.status}: ${response.statusText}`);
+            }
+        } catch (fetchError) {
+            console.error('JSONhost fetch error:', fetchError);
+            console.error('Error details:', {
+                name: fetchError.name,
+                message: fetchError.message,
+                stack: fetchError.stack
+            });
+            
+            // More specific error handling
+            if (fetchError.name === 'TypeError') {
+                if (fetchError.message.includes('Failed to fetch')) {
+                    throw new Error('CORS or network error - JSONhost.com may not allow cross-origin requests from this domain');
+                } else if (fetchError.message.includes('NetworkError')) {
+                    throw new Error('Network error - check internet connection and JSONhost.com accessibility');
+                }
+            }
+            
+            throw new Error(`JSONhost sync failed: ${fetchError.message}`);
         }
     }
 
-    async syncWithMultipleServices() {
-        let syncedWithNPoint = false;
-        let syncedWithTiiny = false;
-        let syncedWithJsonsilo = false;
-        let syncedWithJsonhost = false;
-
-        // Try JSONhost first (newest service)
-        if (this.isJsonhostConfigValid()) {
-            try {
-                await this.syncWithJsonhost();
-                syncedWithJsonhost = true;
-            } catch (error) {
-                console.error('JSONhost sync failed:', error);
-            }
-        }
-
-        // Try JSonsilo as fallback
-        if (!syncedWithJsonhost && this.isJsonsiloConfigValid()) {
-            try {
-                await this.syncWithJsonsilo();
-                syncedWithJsonsilo = true;
-            } catch (error) {
-                console.error('JSonsilo sync failed:', error);
-            }
-        }
-
-        // Try NPoint as fallback
-        if (!syncedWithJsonhost && !syncedWithJsonsilo && this.isNPointConfigValid()) {
-            try {
-                await this.syncWithNPoint();
-                syncedWithNPoint = true;
-            } catch (error) {
-                console.error('NPoint sync failed:', error);
-            }
-        }
-
-        // Try Tiiny as final fallback
-        if (!syncedWithJsonhost && !syncedWithJsonsilo && !syncedWithNPoint && this.isTiinyConfigValid()) {
-            try {
-                await this.syncWithTiiny();
-                syncedWithTiiny = true;
-            } catch (error) {
-                console.error('Tiiny sync failed:', error);
-            }
-        }
-
-        if (!syncedWithJsonhost && !syncedWithJsonsilo && !syncedWithNPoint && !syncedWithTiiny) {
-            throw new Error('All services failed');
-        }
-
-        const serviceName = syncedWithJsonhost ? 'JSONhost' :
-                           syncedWithJsonsilo ? 'JSonsilo' : 
-                           syncedWithNPoint ? 'NPoint' : 'Tiiny';
-        this.updateSyncStatus('synced', `Synced via ${serviceName}`);
-    }
 
     processCloudData(cloudData, serviceName) {
+        console.log('Processing cloud data:', cloudData);
+        
         if (cloudData && cloudData.notices) {
             const cloudNotices = cloudData.notices;
             const cloudLastUpdated = new Date(cloudData.lastUpdated || 0);
             const localLastUpdated = new Date(this.lastSyncTime || 0);
+            
+            console.log('Cloud last updated:', cloudLastUpdated);
+            console.log('Local last updated:', localLastUpdated);
+            console.log('Should update:', cloudLastUpdated > localLastUpdated);
 
-            if (cloudLastUpdated > localLastUpdated) {
+            // Always update on first sync (when lastSyncTime is null)
+            if (!this.lastSyncTime || cloudLastUpdated > localLastUpdated) {
+                console.log('Updating local data with cloud data');
                 this.notices = cloudNotices;
                 this.saveToStorage();
                 this.applyFiltersAndSort();
                 this.render();
+            } else {
+                console.log('Local data is up to date');
             }
+        } else {
+            console.log('No valid cloud data or notices array found');
         }
 
         this.lastSyncTime = new Date().toISOString();
@@ -476,28 +453,89 @@ class NoticeBoard {
     }
 
     async uploadToCloud() {
-        // All current services (NPoint.io, Tiiny.host, JSonsilo) are read-only for this app
-        // Data must be manually updated through their web interfaces
         const config = window.CLOUD_CONFIG;
         
-        switch (config.service) {
-            case 'npoint':
-                console.log('NPoint.io is read-only - data not uploaded to cloud');
-                break;
-            case 'tiiny':
-                console.log('Tiiny.host is read-only - data not uploaded to cloud');
-                break;
-            case 'jsonsilo':
-                console.log('JSonsilo is read-only in this implementation - data not uploaded to cloud');
-                break;
-            case 'jsonhost':
-                console.log('JSONhost is read-only in this implementation - data not uploaded to cloud');
-                break;
-            default:
-                console.log('Read-only services - data not uploaded to cloud');
+        if (config.service === 'jsonhost' && this.isJsonhostConfigValid()) {
+            try {
+                await this.uploadToJsonhost();
+                console.log('Data uploaded to JSONhost successfully');
+            } catch (error) {
+                console.error('Failed to upload to JSONhost:', error);
+                
+                // Handle CORS-specific errors gracefully
+                if (error.message.includes('CORS') || error.message.includes('cross-origin')) {
+                    this.showToast('Cloud sync disabled: CORS restriction. Data saved locally only.', 'warning');
+                    this.updateSyncStatus('offline', 'Local storage only (CORS restriction)');
+                    this.cloudWriteEnabled = false;
+                } else {
+                    this.showToast('Failed to sync data to cloud', 'error');
+                }
+            }
+        } else {
+            console.log('JSONhost not properly configured - data saved locally only');
+            this.updateSyncStatus('offline', 'Local storage only');
         }
-        
-        return;
+    }
+
+    async uploadToJsonhost() {
+        const config = window.CLOUD_CONFIG.jsonhost;
+        if (!this.isJsonhostConfigValid()) {
+            throw new Error('JSONhost configuration invalid');
+        }
+
+        const data = {
+            notices: this.notices,
+            lastUpdated: new Date().toISOString(),
+            version: "1.0",
+            metadata: {
+                title: "SMP College Notice Board",
+                description: "Official notices and announcements",
+                totalNotices: this.notices.length,
+                service: "jsonhost"
+            }
+        };
+
+        const jsonUrl = `${config.baseUrl}${config.jsonId}`;
+        console.log('Uploading data to JSONhost:', jsonUrl);
+
+        try {
+            const response = await fetch(jsonUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': config.apiToken
+                },
+                mode: 'cors',
+                body: JSON.stringify(data)
+            });
+
+            console.log('JSONhost upload response status:', response.status);
+
+            if (response.ok) {
+                this.showToast('Data synced to cloud successfully', 'success');
+                this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
+                return response;
+            } else {
+                const errorText = await response.text();
+                console.error('JSONhost upload error response:', errorText);
+                
+                if (response.status === 401) {
+                    throw new Error('Invalid API token - check your JSONhost authorization token');
+                } else if (response.status === 403) {
+                    throw new Error('POST requests not enabled - enable POST/PATCH API in JSONhost admin settings');
+                } else {
+                    throw new Error(`JSONhost error ${response.status}: ${response.statusText}`);
+                }
+            }
+        } catch (fetchError) {
+            console.error('JSONhost upload fetch error:', fetchError);
+            
+            if (fetchError.name === 'TypeError' && fetchError.message.includes('Failed to fetch')) {
+                throw new Error('Network error - check internet connection and CORS settings');
+            }
+            
+            throw fetchError;
+        }
     }
 
     updateSyncStatus(status, message) {
@@ -550,19 +588,9 @@ class NoticeBoard {
         this.noticesContainer.className = `notices-container ${this.viewMode}-view`;
     }
 
-    handleSearch(query) {
-        this.currentSearch = query.toLowerCase().trim();
-        this.clearSearch.style.display = query ? 'block' : 'none';
-        this.applyFiltersAndSort();
-        this.render();
-    }
-
-    clearSearchInput() {
-        this.searchInput.value = '';
-        this.currentSearch = '';
-        this.clearSearch.style.display = 'none';
-        this.applyFiltersAndSort();
-        this.render();
+    updateActiveFilterButton(activeBtn) {
+        this.filterButtons.forEach(btn => btn.classList.remove('active'));
+        activeBtn.classList.add('active');
     }
 
     handleCategoryFilter(category) {
@@ -571,32 +599,12 @@ class NoticeBoard {
         this.render();
     }
 
-    handleSortChange(sortBy) {
-        this.sortBy = sortBy;
-        this.applyFiltersAndSort();
-        this.render();
-    }
-
     applyFiltersAndSort() {
         let filtered = [...this.notices];
 
         // Apply category filter
-        if (this.currentFilter) {
+        if (this.currentFilter && this.currentFilter !== 'all') {
             filtered = filtered.filter(notice => notice.category === this.currentFilter);
-        }
-
-        // Apply search filter
-        if (this.currentSearch) {
-            filtered = filtered.filter(notice => {
-                const searchFields = [
-                    notice.title,
-                    notice.content,
-                    notice.author,
-                    notice.category,
-                    ...(notice.tags || [])
-                ].join(' ').toLowerCase();
-                return searchFields.includes(this.currentSearch);
-            });
         }
 
         // Apply tag filter
@@ -610,7 +618,9 @@ class NoticeBoard {
         filtered.sort((a, b) => {
             switch (this.sortBy) {
                 case 'date-desc':
-                    return new Date(b.date) - new Date(a.date);
+                    // Secondary sort by order
+                    const dateComparison = new Date(b.date) - new Date(a.date);
+                    return dateComparison !== 0 ? dateComparison : (a.order || 99) - (b.order || 99);
                 case 'date-asc':
                     return new Date(a.date) - new Date(b.date);
                 case 'priority':
@@ -622,8 +632,12 @@ class NoticeBoard {
                     return aDeadline - bDeadline;
                 case 'title':
                     return a.title.localeCompare(b.title);
+                case 'order':
+                    return (a.order || 99) - (b.order || 99);
                 default:
-                    return 0;
+                    // Default sort by order then date
+                    const orderComparison = (a.order || 99) - (b.order || 99);
+                    return orderComparison !== 0 ? orderComparison : new Date(b.date) - new Date(a.date);
             }
         });
 
@@ -779,8 +793,13 @@ class NoticeBoard {
     }
 
     renderActiveTags() {
+        // Skip rendering active tags if container doesn't exist (not used in current design)
+        if (!this.activeTagsContainer) {
+            return;
+        }
+        
         if (this.activeTags.size === 0) {
-            this.activeTags.innerHTML = '';
+            this.activeTagsContainer.innerHTML = '';
             return;
         }
 
@@ -793,10 +812,10 @@ class NoticeBoard {
             </div>
         `).join('');
 
-        this.activeTags.innerHTML = tagsHTML;
+        this.activeTagsContainer.innerHTML = tagsHTML;
 
         // Add event listeners to remove buttons
-        this.activeTags.querySelectorAll('.remove-tag').forEach(btn => {
+        this.activeTagsContainer.querySelectorAll('.remove-tag').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.toggleTag(btn.dataset.tag);
             });
@@ -815,6 +834,7 @@ class NoticeBoard {
 
     showNoticeModal(notice = null) {
         this.currentEditingNotice = notice;
+        this.populateOrderOptions();
         
         if (notice) {
             // Edit mode
@@ -832,6 +852,31 @@ class NoticeBoard {
         this.noticeTitle.focus();
     }
 
+    populateOrderOptions() {
+        const orderSelect = document.getElementById('noticeOrder');
+        if (!orderSelect) return;
+
+        const usedOrders = this.notices.map(notice => notice.order || 99);
+        const maxOrder = Math.max(...usedOrders, 0);
+        
+        let options = '';
+        for (let i = 1; i <= Math.max(maxOrder + 1, 10); i++) {
+            const label = this.getOrderLabel(i);
+            options += `<option value="${i}">${i} - ${label}</option>`;
+        }
+        
+        orderSelect.innerHTML = options;
+        orderSelect.value = maxOrder + 1;
+    }
+
+    getOrderLabel(order) {
+        const labels = {
+            1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth', 5: 'Fifth',
+            6: 'Sixth', 7: 'Seventh', 8: 'Eighth', 9: 'Ninth', 10: 'Tenth'
+        };
+        return labels[order] || `${order}th`;
+    }
+
     hideNoticeModal() {
         this.noticeModal.classList.remove('show');
         this.currentEditingNotice = null;
@@ -845,32 +890,56 @@ class NoticeBoard {
         this.noticeDate.value = notice.date;
         this.noticeDeadline.value = notice.deadline || '';
         this.noticeAuthor.value = notice.author || '';
-        this.noticeTags.value = notice.tags ? notice.tags.join(', ') : '';
         this.quillEditor.root.innerHTML = notice.content;
+        
+        // Populate tags
+        this.currentTags = notice.tags ? [...notice.tags] : [];
+        this.renderTagsDisplay();
+        
+        // Populate attachments
+        this.currentAttachments = notice.attachments ? [...notice.attachments] : [];
+        this.renderAttachmentsPreview();
+        
+        // Set order
+        const orderSelect = document.getElementById('noticeOrder');
+        if (orderSelect) {
+            orderSelect.value = notice.order || 99;
+        }
     }
 
     resetForm() {
         this.noticeForm.reset();
         this.noticeDate.value = new Date().toISOString().split('T')[0];
         this.quillEditor.root.innerHTML = '';
+        this.currentTags = [];
+        this.currentAttachments = [];
+        this.renderTagsDisplay();
+        this.renderAttachmentsPreview();
     }
 
     handleFormSubmit(e) {
         e.preventDefault();
+        console.log('Form submitted');
         
         if (!this.validateForm()) {
+            console.log('Form validation failed');
             return;
         }
+        console.log('Form validation passed');
 
         const formData = this.getFormData();
+        console.log('Form data extracted:', formData);
         
         if (this.currentEditingNotice) {
+            console.log('Updating existing notice');
             this.updateNotice(this.currentEditingNotice.id, formData);
         } else {
+            console.log('Adding new notice');
             this.addNotice(formData);
         }
         
         this.hideNoticeModal();
+        console.log('Modal hidden');
     }
 
     validateForm() {
@@ -900,11 +969,6 @@ class NoticeBoard {
     }
 
     getFormData() {
-        const tags = this.noticeTags.value
-            .split(',')
-            .map(tag => tag.trim())
-            .filter(tag => tag);
-
         return {
             title: this.noticeTitle.value.trim(),
             content: this.quillEditor.root.innerHTML,
@@ -913,24 +977,39 @@ class NoticeBoard {
             date: this.noticeDate.value,
             deadline: this.noticeDeadline.value || null,
             author: this.noticeAuthor.value.trim(),
-            tags: tags.length > 0 ? tags : null,
+            tags: this.currentTags.length > 0 ? this.currentTags : null,
+            attachments: this.currentAttachments.length > 0 ? this.currentAttachments : null,
+            order: parseInt(document.getElementById('noticeOrder').value) || 99,
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
         };
     }
 
     addNotice(noticeData) {
+        console.log('Adding notice with data:', noticeData);
+        
         const notice = {
             id: Date.now().toString(),
             ...noticeData
         };
 
+        console.log('Generated notice object:', notice);
+        
         this.notices.unshift(notice);
+        console.log('Updated notices array:', this.notices);
+        
         this.saveToStorage();
-        this.uploadToCloud();
+        console.log('Saved to localStorage');
+        
+        // Don't let cloud upload errors prevent local saving
+        this.uploadToCloud().catch(error => {
+            console.log('Cloud upload failed, but notice saved locally:', error.message);
+        });
+        
         this.applyFiltersAndSort();
         this.render();
         this.showToast('Notice added successfully', 'success');
+        console.log('Notice addition completed');
     }
 
     updateNotice(id, noticeData) {
@@ -1271,8 +1350,11 @@ class NoticeBoard {
         }
     }
 
-    focusSearch() {
-        this.searchInput.focus();
+    showMobileFilters() {
+        const filterSection = document.querySelector('.category-filter-section');
+        if (filterSection) {
+            filterSection.scrollIntoView({ behavior: 'smooth' });
+        }
     }
 
     showMobileFilters() {
@@ -1357,6 +1439,200 @@ class NoticeBoard {
 
     hideLoading() {
         this.loadingOverlay.style.display = 'none';
+    }
+
+    initializeSubHeader() {
+        // Auto-hide sub-header after 8 seconds
+        const subHeader = document.getElementById('subHeader');
+        if (subHeader) {
+            setTimeout(() => {
+                subHeader.classList.add('fade-out');
+                // Remove from DOM after fade-out animation
+                setTimeout(() => {
+                    if (subHeader.parentNode) {
+                        subHeader.parentNode.removeChild(subHeader);
+                    }
+                }, 300); // Match CSS transition duration
+            }, 8000);
+        }
+    }
+
+    handleTagInput(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const tagValue = e.target.value.trim();
+            if (tagValue && !this.currentTags.includes(tagValue)) {
+                this.currentTags.push(tagValue);
+                this.renderTagsDisplay();
+                e.target.value = '';
+            }
+        }
+    }
+
+    renderTagsDisplay() {
+        const tagsDisplay = document.getElementById('tagsDisplay');
+        if (!tagsDisplay) return;
+
+        tagsDisplay.innerHTML = this.currentTags.map(tag => `
+            <div class="tag-chip">
+                ${tag}
+                <button type="button" class="remove-tag" onclick="noticeBoard.removeTag('${tag}')">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    removeTag(tag) {
+        this.currentTags = this.currentTags.filter(t => t !== tag);
+        this.renderTagsDisplay();
+    }
+
+    handleFileSelection(e) {
+        const files = Array.from(e.target.files);
+        this.processFiles(files);
+    }
+
+    setupFileDragDrop() {
+        const container = document.querySelector('.file-input-container');
+        if (!container) return;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            container.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            container.addEventListener(eventName, () => {
+                container.classList.add('drag-over');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            container.addEventListener(eventName, () => {
+                container.classList.remove('drag-over');
+            }, false);
+        });
+
+        container.addEventListener('drop', (e) => {
+            const files = Array.from(e.dataTransfer.files);
+            this.processFiles(files);
+        }, false);
+    }
+
+    processFiles(files) {
+        files.forEach(file => {
+            if (!this.allowedFileTypes.includes(file.type)) {
+                this.showToast(`File type not allowed: ${file.name}`, 'error');
+                return;
+            }
+
+            if (file.size > this.maxFileSize) {
+                this.showToast(`File too large: ${file.name} (max 5MB)`, 'error');
+                return;
+            }
+
+            const fileData = {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                data: null
+            };
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                fileData.data = e.target.result;
+                this.currentAttachments.push(fileData);
+                this.renderAttachmentsPreview();
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    renderAttachmentsPreview() {
+        const preview = document.getElementById('attachmentsPreview');
+        if (!preview) return;
+
+        preview.innerHTML = this.currentAttachments.map((file, index) => `
+            <div class="attachment-item">
+                <i class="attachment-icon ${this.getFileIcon(file.type)}"></i>
+                <div class="attachment-info">
+                    <div class="attachment-name">${file.name}</div>
+                    <div class="attachment-size">${this.formatFileSize(file.size)}</div>
+                </div>
+                <button type="button" class="remove-attachment" onclick="noticeBoard.removeAttachment(${index})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    removeAttachment(index) {
+        this.currentAttachments.splice(index, 1);
+        this.renderAttachmentsPreview();
+    }
+
+    getFileIcon(fileType) {
+        if (fileType.startsWith('image/')) return 'fas fa-image';
+        if (fileType === 'application/pdf') return 'fas fa-file-pdf';
+        if (fileType.includes('csv') || fileType.includes('excel') || fileType.includes('spreadsheet')) return 'fas fa-file-csv';
+        if (fileType.includes('word') || fileType.includes('document')) return 'fas fa-file-word';
+        if (fileType === 'text/plain') return 'fas fa-file-alt';
+        return 'fas fa-file';
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Debug function to test JSONhost URL directly
+    async testJsonhostURL() {
+        const config = window.CLOUD_CONFIG.jsonhost;
+        if (!config || !config.jsonId) {
+            console.error('No JSONhost configuration found');
+            this.showToast('No JSONhost configuration found', 'error');
+            return;
+        }
+
+        const jsonUrl = `${config.baseUrl}${config.jsonId}`;
+        console.log('Testing JSONhost URL:', jsonUrl);
+        this.showToast('Testing JSONhost URL...', 'info');
+
+        try {
+            // Test simple fetch without headers first
+            const response = await fetch(jsonUrl, {
+                method: 'GET',
+                mode: 'cors'
+            });
+
+            console.log('Direct test - Status:', response.status);
+            console.log('Direct test - Headers:', [...response.headers.entries()]);
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Direct test - Response:', data);
+                this.showToast('JSONhost URL test successful!', 'success');
+                
+                // Test the processCloudData function directly
+                console.log('Testing processCloudData with response...');
+                this.processCloudData(data, 'Test');
+                
+            } else {
+                console.error('Direct test failed:', response.status, response.statusText);
+                this.showToast(`JSONhost test failed: ${response.status}`, 'error');
+            }
+        } catch (error) {
+            console.error('Direct test error:', error);
+            this.showToast(`JSONhost test error: ${error.message}`, 'error');
+        }
     }
 }
 

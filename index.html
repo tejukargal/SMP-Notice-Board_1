@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SMP College Notice Board</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+Kannada:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Kalam:wght@300;400;700&family=Noto+Sans+Kannada:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 </head>
@@ -44,77 +44,98 @@
             </div>
         </header>
 
-        <!-- Search and Filters -->
-        <div class="filters-section">
-            <div class="search-container">
-                <div class="search-box">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="searchInput" placeholder="Search notices..." autocomplete="off">
-                    <button class="clear-search" id="clearSearch" style="display: none;">
-                        <i class="fas fa-times"></i>
+        <!-- Sub Header (Temporary Display) -->
+        <div class="sub-header" id="subHeader">
+            <div class="sub-header-content">
+                <div class="institution-info">
+                    <p class="institution-name">SANJAY MEMORIAL POLYTECHNIC</p>
+                    <p class="institution-name-kannada">ಸಂಜಯ್ ಮೆಮೋರಿಯಲ್ ಪಾಲಿಟೆಕ್ನಿಕ್</p>
+                </div>
+                <div class="purpose-info">
+                    <p class="purpose-text">Results • Notices • Memos • Announcements</p>
+                    <p class="purpose-text-kannada">ಫಲಿತಾಂಶಗಳು • ಸೂಚನೆಗಳು • ಮೆಮೊಗಳು • ಪ್ರಕಟನೆಗಳು</p>
+                </div>
+            </div>
+        </div>
+
+
+        <main class="main-content">
+            <div class="notices-container" id="noticesContainer" tabindex="0" role="region" aria-label="Notice cards">
+                <!-- Notices will be dynamically generated here -->
+            </div>
+            
+            <!-- Category Filter Section -->
+            <div class="category-filter-section">
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-category="all">
+                        <i class="fas fa-th-large"></i>
+                        <span>All</span>
+                    </button>
+                    <button class="filter-btn" data-category="academic">
+                        <i class="fas fa-graduation-cap"></i>
+                        <span>Academic</span>
+                    </button>
+                    <button class="filter-btn" data-category="events">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </button>
+                    <button class="filter-btn" data-category="exams">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Exams</span>
+                    </button>
+                    <button class="filter-btn" data-category="urgent">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Urgent</span>
+                    </button>
+                    <button class="filter-btn" data-category="scholarship">
+                        <i class="fas fa-award"></i>
+                        <span>Scholarship</span>
+                    </button>
+                    <button class="filter-btn" data-category="fee-payments">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </button>
+                    <button class="filter-btn" data-category="admission">
+                        <i class="fas fa-door-open"></i>
+                        <span>Admission</span>
+                    </button>
+                    <button class="filter-btn" data-category="placement">
+                        <i class="fas fa-briefcase"></i>
+                        <span>Placement</span>
+                    </button>
+                    <button class="filter-btn" data-category="library">
+                        <i class="fas fa-book"></i>
+                        <span>Library</span>
                     </button>
                 </div>
             </div>
             
-            <div class="filters-container">
-                <div class="filter-group">
-                    <label for="categoryFilter">Category:</label>
-                    <select id="categoryFilter">
-                        <option value="">All Categories</option>
-                        <option value="academic">Academic</option>
-                        <option value="events">Events</option>
-                        <option value="exams">Exams</option>
-                        <option value="urgent">Urgent</option>
-                        <option value="scholarship">Scholarship</option>
-                        <option value="fee-payments">Fee Payments</option>
-                        <option value="admission">Admission</option>
-                        <option value="placement">Placement</option>
-                        <option value="library">Library</option>
-                    </select>
-                </div>
-                
-                <div class="filter-group">
-                    <label for="sortBy">Sort by:</label>
-                    <select id="sortBy">
-                        <option value="date-desc">Latest First</option>
-                        <option value="date-asc">Oldest First</option>
-                        <option value="priority">Priority</option>
-                        <option value="deadline">Deadline</option>
-                        <option value="title">Title A-Z</option>
-                    </select>
+            <!-- Simple Navigation Bar Below Cards -->
+            <div class="notices-navigation" id="noticesNavigation">
+                <div class="nav-scrollbar" id="navScrollbar">
+                    <div class="nav-track" id="navTrack"></div>
                 </div>
             </div>
 
-            <div class="active-tags" id="activeTags"></div>
-        </div>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="notices-container" id="noticesContainer">
-                <div class="empty-state" id="emptyState">
-                    <i class="fas fa-clipboard-list"></i>
-                    <h3>No notices found</h3>
-                    <p>Get started by creating your first notice or adjust your filters.</p>
-                </div>
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <i class="fas fa-clipboard-list"></i>
+                <h3>No notices found</h3>
+                <p>Be the first to add a notice to the board!</p>
             </div>
         </main>
 
         <!-- Floating Action Button -->
-        <button class="fab" id="addNoticeBtn" title="Add New Notice (Ctrl+N)">
+        <button class="fab admin-only" id="addNoticeBtn" title="Add New Notice (Ctrl+N)" style="display: none;">
             <i class="fas fa-plus"></i>
         </button>
 
         <!-- Mobile Bottom Controls -->
         <div class="mobile-controls">
-            <button class="mobile-btn" id="mobileSearch">
-                <i class="fas fa-search"></i>
-                <span>Search</span>
-            </button>
             <button class="mobile-btn" id="mobileFilter">
                 <i class="fas fa-filter"></i>
                 <span>Filter</span>
             </button>
-            <button class="mobile-btn" id="mobileAdd">
+            <button class="mobile-btn admin-only" id="mobileAdd" style="display: none;">
                 <i class="fas fa-plus"></i>
                 <span>Add</span>
             </button>
@@ -164,6 +185,13 @@
                             <option value="critical">Critical</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label for="noticeOrder">Display Order</label>
+                        <select id="noticeOrder">
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                        <small class="form-help">Lower numbers appear first in the list</small>
+                    </div>
                 </div>
 
                 <div class="form-row">
@@ -183,9 +211,25 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="noticeTags">Tags (Optional)</label>
-                    <input type="text" id="noticeTags" placeholder="Enter tags separated by commas">
-                    <small class="form-help">Add keywords to help organize and find this notice</small>
+                    <label for="noticeTags">Tags (Keywords)</label>
+                    <div class="tags-input-container">
+                        <div class="tags-display" id="tagsDisplay"></div>
+                        <input type="text" id="tagInput" placeholder="Add tags (press Enter)" class="tag-input">
+                    </div>
+                    <small class="form-help">Add relevant keywords to help categorize and find this notice</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="noticeAttachments">Attachments</label>
+                    <div class="file-input-container">
+                        <input type="file" id="noticeAttachments" multiple accept=".jpg,.jpeg,.png,.gif,.pdf,.csv,.doc,.docx,.txt" class="file-input">
+                        <div class="file-input-label" id="fileInputLabel">
+                            <i class="fas fa-paperclip"></i>
+                            <span>Choose files or drag & drop</span>
+                            <small>Images, PDFs, CSV, Documents (Max 5MB each)</small>
+                        </div>
+                    </div>
+                    <div class="attachments-preview" id="attachmentsPreview"></div>
                 </div>
 
                 <div class="form-group">
@@ -291,34 +335,22 @@
 
     <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
     <script>
-        // Cloud JSON Configuration - Choose one service
+        // JSONhost.com Configuration
+        // To set up JSONhost integration:
+        // 1. Create a JSON file at https://jsonhost.com/
+        // 2. Replace 'YOUR_JSON_ID' with your actual JSON ID from the URL
+        // 3. Get your API Authorization token from the JSONhost admin interface
+        // 4. Replace 'YOUR_API_TOKEN' with your actual token
+        // 5. Enable POST/PATCH requests in JSONhost admin settings
+        
         window.CLOUD_CONFIG = {
-            // Service type: 'npoint', 'tiiny', 'jsonsilo', 'jsonhost', or 'multi' (fallback)
             service: 'jsonhost',
-            
-            // JSONhost.com Configuration
             jsonhost: {
-                jsonUrl: 'https://jsonhost.com/json/f20bbd47f6d0960afd4b223442e0c2b8',
-                // Example: 'https://jsonhost.com/json/abc123'
-                editKey: null, // Optional for editing capabilities
-            },
-            
-            // JSonsilo.com Configuration
-            jsonsilo: {
-                publicUrl: 'https://api.jsonsilo.com/public/2076022e-eafa-4826-a43b-5ee591b9792a',
-                apiKey: null, // Optional for private silos
-            },
-            
-            // NPoint.io Configuration
-            npoint: {
-                jsonId: '2076022e-eafa-4826-a43b-5ee591b9792a',
-                baseUrl: 'https://api.npoint.io'
-            },
-            
-            // Tiiny.host Configuration
-            tiiny: {
-                jsonUrl: 'https://magenta-cherri-75.tiiny.site',
-                // Example: 'https://plum-daffi-43.tiiny.site/json/notices'
+                // Example: if your JSONhost URL is https://jsonhost.com/json/abc123def456
+                // then your jsonId is 'abc123def456'
+                jsonId: 'f20bbd47f6d0960afd4b223442e0c2b8', // Replace with your actual JSON ID
+                apiToken: 'mqvlc7eqvavhd0vevv2y0qbndahywhsz', // Replace with your API Authorization token
+                baseUrl: 'https://jsonhost.com/json/'
             }
         };
     </script>

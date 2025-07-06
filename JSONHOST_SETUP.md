@@ -1,27 +1,28 @@
-# JSONhost.com JSON Hosting Setup Guide
+# JSONhost.com API Integration Setup Guide
 
 ## Overview
 
-This guide explains how to set up JSON data hosting for the SMP College Notice Board application using JSONhost.com. JSONhost is a simple JSON hosting service that provides easy JSON hosting with APIs, perfect for storing and retrieving static data for web applications.
+This guide explains how to set up full API integration for the SMP College Notice Board application using JSONhost.com. The application now supports both reading and writing data through JSONhost's REST API, allowing real-time synchronization of notices.
 
 ## What is JSONhost.com?
 
 JSONhost.com is a JSON hosting platform that provides:
-- **Simple JSON Storage**: Easy upload and hosting of JSON files
-- **Direct URL Access**: Simple HTTP GET requests to access data
-- **Form-Based Editing**: Easy editing through web interface
-- **API Integration**: RESTful endpoints for data access
-- **Edit Keys**: Optional security for data modification
-- **Fast Access**: Quick data retrieval for applications
+- **JSON Storage & Hosting**: Upload and host JSON files with REST API access
+- **GET/POST/PATCH APIs**: Full CRUD operations via RESTful endpoints  
+- **API Authorization Tokens**: Secure write access with token authentication
+- **Real-time Updates**: Instant synchronization between app and cloud
+- **Admin Interface**: Web-based JSON editing and management
+- **Fast Access**: Quick data retrieval and updates for applications
 
-## Important: Static JSON Hosting
+## New Features: Full API Integration
 
-⚠️ **Key Characteristics**:
-- **Read-Only Implementation**: This app uses JSONhost in read-only mode
-- **Static Files**: JSON content updated manually through web interface
-- **Simple API**: Straightforward GET requests for data access
-- **Manual Updates**: Content changes done through JSONhost website
-- **Perfect for**: Notice boards and static content distribution
+✅ **Key Capabilities**:
+- **Read/Write Access**: Full synchronization with cloud storage
+- **Real-time Sync**: Notices automatically sync to JSONhost when added/edited
+- **API Authentication**: Secure write operations with authorization tokens
+- **Automatic Backup**: All changes saved both locally and in cloud
+- **Admin Controls**: Add/edit/delete notices directly from the application
+- **Offline Support**: Works offline with automatic sync when reconnected
 
 ## Step-by-Step Setup
 
@@ -48,48 +49,48 @@ Prepare your initial JSON structure:
 }
 ```
 
-### Step 3: Upload to JSONhost
+### Step 3: Upload to JSONhost and Configure API Access
 
-1. **Method A - Direct Upload**:
+1. **Upload JSON File**:
    - Use JSONhost's upload interface
    - Upload your prepared JSON file
-   - Get the direct access URL
+   - Note the JSON ID from the resulting URL
 
-2. **Method B - Form Creation**:
-   - Use JSONhost's form-based creation
-   - Paste your JSON structure
-   - Save and get access URL
+2. **Enable API Access**:
+   - Go to your JSON file's admin interface
+   - Navigate to **Settings**
+   - **Enable "POST requests"** 
+   - **Enable "PATCH requests"**
+   - **Copy your "API Authorization token"**
 
-3. **Get Your URLs**:
-   - **Access URL**: `https://jsonhost.com/json/abc123`
-   - **Edit URL**: Link to modify your JSON (if available)
-   - **Edit Key**: Optional security key for modifications
+3. **Record Your Configuration**:
+   - **JSON ID**: Extract from URL `https://jsonhost.com/json/abc123def456` → `abc123def456`
+   - **API Token**: Copy from admin settings
+   - **Access URL**: For verification `https://jsonhost.com/json/abc123def456`
 
 ### Step 4: Configure the Application
 
 1. Open `index.html` in your text editor
-2. Find the cloud configuration section (around line 295):
+2. Find the cloud configuration section (around line 346):
    ```javascript
    window.CLOUD_CONFIG = {
-       // Service type: 'npoint', 'tiiny', 'jsonsilo', 'jsonhost', or 'multi'
        service: 'jsonhost',
-       
-       // JSONhost.com Configuration
        jsonhost: {
-           jsonUrl: 'YOUR_JSONHOST_URL_HERE',
-           // Example: 'https://jsonhost.com/json/abc123'
-           editKey: null, // Optional for editing capabilities
+           jsonId: 'YOUR_JSON_ID', // Replace with your actual JSON ID
+           apiToken: 'YOUR_API_TOKEN', // Replace with your API Authorization token
+           baseUrl: 'https://jsonhost.com/json/'
        }
    };
    ```
 
-3. Replace the placeholder with your actual JSONhost URL:
+3. Replace the placeholders with your actual values:
    ```javascript
    window.CLOUD_CONFIG = {
        service: 'jsonhost',
        jsonhost: {
-           jsonUrl: 'https://jsonhost.com/json/abc123',
-           editKey: null // Add if you have edit capabilities
+           jsonId: 'abc123def456789', // Your JSON ID from the URL
+           apiToken: 'your_api_authorization_token_here', // From JSONhost admin
+           baseUrl: 'https://jsonhost.com/json/'
        }
    };
    ```
@@ -102,12 +103,20 @@ Prepare your initial JSON structure:
 2. Check the sync status indicator in the header
 3. Expected status indicators:
    - **"Syncing..."** initially
-   - **"Synced via JSONhost (Read-only)"** when successful
+   - **"Synced via JSONhost (Read/Write)"** when successful
+   - **"JSONhost (Ready)"** if file doesn't exist yet (will be created)
    - **"Sync failed"** if configuration is incorrect
 
-4. The application will fetch notices from your JSONhost file on page load
-5. Local changes are saved in browser storage
-6. Click the sync status indicator to manually refresh data from the cloud
+4. **Test Full Integration**:
+   - Login as admin (code: `teju_smp`)
+   - Add a test notice - it should automatically sync to JSONhost
+   - Refresh the page - notice should load from cloud
+   - Edit/delete notices - changes should sync in real-time
+
+5. **Verify Cloud Storage**:
+   - Check your JSONhost admin interface
+   - Your notices should appear in the JSON file
+   - Timestamps should update with each change
 
 ## Configuration Options
 
