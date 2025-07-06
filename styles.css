@@ -1546,15 +1546,25 @@ body.admin-mode .fab {
   
   /* Mobile Card Header Styles */
   .header-meta {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: var(--spacing-xs);
   }
   
   .category-info,
   .priority-info,
   .deadline-info {
-    padding: var(--spacing-xs);
-    font-size: var(--font-size-xs);
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  
+  .category-info i,
+  .priority-info i,
+  .deadline-info i {
+    font-size: 10px;
   }
   
   .notice-title {
@@ -1574,6 +1584,22 @@ body.admin-mode .fab {
 @media (max-width: 480px) {
   .header-content {
     padding: var(--spacing-sm);
+  }
+  
+  /* Extra compact header tabs for very small screens */
+  .category-info,
+  .priority-info,
+  .deadline-info {
+    padding: 3px 6px;
+    font-size: 10px;
+    border-radius: 3px;
+  }
+  
+  .category-info i,
+  .priority-info i,
+  .deadline-info i {
+    font-size: 9px;
+    margin-right: 2px;
   }
   
   .category-filter-section {
