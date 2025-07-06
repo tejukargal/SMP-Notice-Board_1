@@ -685,7 +685,7 @@ body {
 /* Notice Cards */
 .notice-card {
   background: transparent;
-  border: none;
+  border: 2px solid #e5e7eb;
   border-radius: var(--radius-lg);
   transition: all var(--transition-base);
   cursor: pointer;
@@ -697,7 +697,7 @@ body {
 
 [data-theme="dark"] .notice-card {
   background: transparent;
-  border: none;
+  border: 2px solid #374151;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -745,8 +745,7 @@ body {
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   margin: 0;
   box-sizing: border-box;
-  border: 2px solid transparent;
-  border-bottom: none;
+  border: none;
   width: 100%;
 }
 
@@ -858,8 +857,7 @@ body {
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   margin: 0;
   box-sizing: border-box;
-  border: 2px solid #e5e7eb;
-  border-top: none;
+  border: none;
   width: 100%;
 }
 
@@ -869,32 +867,7 @@ body {
   border-color: #374151;
 }
 
-/* Priority-based borders for card body */
-.priority-normal-card .notice-card-body {
-  border-color: #64748b;
-}
-
-.priority-high-card .notice-card-body {
-  border-color: #f59e0b;
-}
-
-.priority-critical-card .notice-card-body {
-  border-color: #ef4444;
-  border-width: 3px;
-}
-
-[data-theme="dark"] .priority-normal-card .notice-card-body {
-  border-color: #64748b;
-}
-
-[data-theme="dark"] .priority-high-card .notice-card-body {
-  border-color: #f59e0b;
-}
-
-[data-theme="dark"] .priority-critical-card .notice-card-body {
-  border-color: #ef4444;
-  border-width: 3px;
-}
+/* Priority-based borders are now handled by the unified card border approach */
 
 [data-theme="dark"] .notice-card-body .notice-content {
   color: #d1d5db;
