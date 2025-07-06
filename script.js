@@ -409,7 +409,7 @@ class NoticeBoard {
             } else if (response.status === 404) {
                 // JSON file doesn't exist yet, create initial structure
                 console.log('JSONhost file not found, will create on first save');
-                this.updateSyncStatus('synced', 'JSONhost (Ready)');
+                this.updateSyncStatus('synced', 'JSONhost (Ready)', true);
             } else {
                 const errorText = await response.text();
                 console.error('JSONhost error response:', errorText);
@@ -499,7 +499,7 @@ class NoticeBoard {
         }
 
         this.lastSyncTime = new Date().toISOString();
-        this.updateSyncStatus('synced', `Synced via ${serviceName}`);
+        this.updateSyncStatus('synced', `Synced via ${serviceName}`, true);
     }
 
     async uploadToCloud() {
@@ -585,7 +585,7 @@ class NoticeBoard {
 
             if (response.ok) {
                 this.showToast('Data synced to cloud successfully', 'success');
-                this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
+                this.updateSyncStatus('synced', 'JSONhost (Read/Write)', true);
                 return response;
             } else {
                 const errorText = await response.text();
@@ -1004,12 +1004,31 @@ class NoticeBoard {
         }
     }
 
-    updateSyncStatus(status, message) {
+    updateSyncStatus(status, message, autoHide = false) {
         this.syncStatus.className = `sync-status ${status}`;
         this.syncStatus.innerHTML = `
             <i class="fas fa-${this.getSyncIcon(status)}"></i>
             <span>${message}</span>
         `;
+        
+        // Auto-hide sync status and show developer info if requested
+        if (autoHide) {
+            setTimeout(() => {
+                this.showDeveloperInfo();
+            }, 2000); // Hide sync status after 2 seconds
+        }
+    }
+    
+    showDeveloperInfo() {
+        this.syncStatus.className = 'sync-status developer-info';
+        this.syncStatus.innerHTML = `
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">Developed by Thejaraj R, SMP</span>
+        `;
+        
+        // Hide developer info after 5 seconds
+        setTimeout(() => {
+            this.syncStatus.style.display = 'none';
+        }, 5000);
     }
 
     getSyncIcon(status) {
@@ -1867,7 +1886,7 @@ class NoticeBoard {
         }
     }
 
-    showToast(message, type = 'info', duration = 3000) {
+    showToast(message, type = 'info', duration = 10000) {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         

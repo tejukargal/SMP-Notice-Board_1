@@ -205,6 +205,16 @@ body {
   color: var(--warning-color);
 }
 
+.sync-status.developer-info {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.sync-status.developer-info span {
+  font-size: 0.75rem !important;
+  font-weight: 400 !important;
+}
+
 .sync-status.error {
   color: var(--error-color);
 }
