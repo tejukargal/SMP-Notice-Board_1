@@ -622,8 +622,33 @@ class NoticeBoard {
             console.log(`Processing ${notice.attachments.length} attachments for notice: ${notice.title}`);
             
             const optimizedAttachments = await Promise.all(notice.attachments.map(async attachment => {
-                // If it's already a Google Drive file, keep the reference
+                // If it's already a Google Drive file, validate it's still accessible
                 if (attachment.driveFile) {
+                    if (this.googleDriveReady && attachment.id) {
+                        try {
+                            // Verify the file still exists and is accessible
+                            await gapi.client.drive.files.get({
+                                fileId: attachment.id,
+                                fields: 'id,name,trashed'
+                            });
+                            console.log(`✅ Google Drive file verified: ${attachment.name}`);
+                            return attachment;
+                        } catch (error) {
+                            console.warn(`⚠️ Google Drive file no longer accessible: ${attachment.name} (${error.message})`);
+                            // Convert to placeholder if file is no longer accessible
+                            return {
+                                name: attachment.name,
+                                type: attachment.type || 'application/octet-stream',
+                                size: attachment.size || 0,
+                                isPlaceholder: true,
+                                originalSize: attachment.size || 0,
+                                note: 'Google Drive file no longer accessible'
+                            };
+                        }
+                    } else if (!this.googleDriveReady) {
+                        console.log(`ℹ️ Google Drive not ready, keeping reference: ${attachment.name}`);
+                        return attachment;
+                    }
                     return attachment;
                 }
 
@@ -757,7 +782,8 @@ class NoticeBoard {
     async initializeGoogleDrive() {
         const config = window.CLOUD_CONFIG?.googledrive;
         
-        console.log('Google Drive configuration check:', {
+        console.log('🔧 Google Drive Initialization Started');
+        console.log('Configuration check:', {
             configExists: !!config,
             enabled: config?.enabled,
             hasApiKey: !!config?.apiKey,
@@ -767,8 +793,9 @@ class NoticeBoard {
         });
 
         if (!config || !config.enabled || !config.apiKey || !config.clientId) {
-            console.log('Google Drive not properly configured - attachments will use compression method');
+            console.log('ℹ️ Google Drive not properly configured - attachments will use compression method');
             console.log('Required: enabled=true, apiKey, clientId');
+            this.showToast('Google Drive not configured - using local storage', 'info');
             return;
         }
 
@@ -782,68 +809,110 @@ class NoticeBoard {
         }
 
         try {
-            console.log('Step 1: Loading Google API...');
+            console.log('📡 Step 1: Loading Google API...');
             
             // Check if gapi is available
             if (typeof gapi === 'undefined') {
                 throw new Error('Google API (gapi) not loaded. Check if Google API script is included.');
             }
 
-            await new Promise((resolve, reject) => {
-                console.log('Step 2: Loading gapi client and auth2...');
-                gapi.load('client:auth2', {
-                    callback: resolve,
-                    onerror: reject
-                });
-            });
+            // Load Google API with timeout
+            await Promise.race([
+                new Promise((resolve, reject) => {
+                    console.log('🔄 Step 2: Loading gapi client and auth2...');
+                    gapi.load('client:auth2', {
+                        callback: resolve,
+                        onerror: (error) => {
+                            console.error('gapi.load error:', error);
+                            reject(new Error('Failed to load Google API client'));
+                        }
+                    });
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Google API loading timeout')), 15000)
+                )
+            ]);
 
-            console.log('Step 3: Initializing gapi client...');
-            await gapi.client.init({
-                apiKey: config.apiKey,
-                clientId: config.clientId,
-                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-                scope: 'https://www.googleapis.com/auth/drive.file'
-            });
+            console.log('⚙️ Step 3: Initializing gapi client...');
+            await Promise.race([
+                gapi.client.init({
+                    apiKey: config.apiKey,
+                    clientId: config.clientId,
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+                    scope: 'https://www.googleapis.com/auth/drive.file'
+                }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Google API initialization timeout')), 10000)
+                )
+            ]);
 
-            console.log('Step 4: Checking authentication status...');
+            console.log('🔐 Step 4: Checking authentication status...');
             const authInstance = gapi.auth2.getAuthInstance();
             console.log('Auth instance created:', !!authInstance);
 
-            // Check if user needs to sign in
+            // Check if user needs to sign in - make this non-blocking
             if (!authInstance.isSignedIn.get()) {
-                console.log('User not signed in, prompting for authentication...');
-                await authInstance.signIn();
+                console.log('🔑 User not signed in, prompting for authentication...');
+                try {
+                    await Promise.race([
+                        authInstance.signIn(),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Sign-in timeout')), 30000)
+                        )
+                    ]);
+                } catch (authError) {
+                    console.warn('⚠️ Authentication failed or cancelled:', authError.message);
+                    if (authError.error === 'popup_closed_by_user') {
+                        this.showToast('Google Drive sign-in cancelled', 'warning');
+                    } else {
+                        this.showToast('Google Drive authentication failed', 'error');
+                    }
+                    return;
+                }
             }
 
-            console.log('Step 5: Creating/finding Drive folder...');
+            console.log('📁 Step 5: Creating/finding Drive folder...');
             this.googleDriveReady = true;
             await this.createOrFindDriveFolder();
             
             console.log('✅ Google Drive initialized successfully');
             this.showToast('Google Drive storage ready', 'success');
+            
+            // Update sync status
+            this.updateSyncStatus('synced', 'Google Drive connected');
+            
         } catch (error) {
             console.error('❌ Failed to initialize Google Drive:');
             console.error('Error type:', error.constructor.name);
             console.error('Error message:', error.message);
             console.error('Full error:', error);
             
+            // Reset Google Drive state
+            this.googleDriveReady = false;
+            this.googleDriveFolderId = null;
+            
             // Provide specific error messages
             let errorMessage = 'Google Drive initialization failed';
             const errorMsg = error.message || error.error || '';
             
             if (errorMsg.includes('API key') || errorMsg.includes('invalid_request')) {
-                errorMessage = 'Invalid Google Drive API key';
+                errorMessage = 'Invalid Google Drive API key - check console for details';
             } else if (errorMsg.includes('client') || errorMsg.includes('unauthorized_client')) {
                 errorMessage = 'Invalid OAuth client ID or unauthorized domain';
             } else if (errorMsg.includes('origin') || errorMsg.includes('redirect_uri')) {
                 errorMessage = 'Domain not authorized for Google API';
             } else if (errorMsg.includes('not loaded')) {
                 errorMessage = 'Google API script not loaded';
+            } else if (errorMsg.includes('timeout')) {
+                errorMessage = 'Google Drive connection timeout';
             } else if (error.status === 401) {
                 errorMessage = 'Google OAuth unauthorized - check client ID and domain';
+            } else if (error.status === 403) {
+                errorMessage = 'Google Drive API access forbidden - check API key';
             }
             
             this.showToast(errorMessage, 'error');
+            this.updateSyncStatus('error', 'Google Drive failed');
             console.log('🔄 Falling back to compression method for attachments');
         }
     }
@@ -883,56 +952,115 @@ class NoticeBoard {
             throw new Error('Google Drive not ready');
         }
 
-        try {
-            console.log(`Uploading ${fileName} to Google Drive...`);
-            
-            const metadata = {
-                name: fileName,
-                parents: [this.googleDriveFolderId]
-            };
+        // Add retry logic for better reliability
+        let lastError;
+        const maxRetries = 3;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                console.log(`📤 Uploading ${fileName} to Google Drive (attempt ${attempt}/${maxRetries})...`);
+                
+                // Check if user is still signed in
+                const authInstance = gapi.auth2.getAuthInstance();
+                if (!authInstance.isSignedIn.get()) {
+                    console.log('🔐 User not signed in, attempting to sign in...');
+                    await authInstance.signIn();
+                }
 
-            // Convert base64 to blob
-            const base64Data = file.data.split(',')[1];
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                const metadata = {
+                    name: fileName,
+                    parents: [this.googleDriveFolderId]
+                };
+
+                // Convert base64 to blob
+                const base64Data = file.data.split(',')[1];
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: file.type });
+
+                const form = new FormData();
+                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                form.append('file', blob);
+
+                const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
+                if (!accessToken) {
+                    throw new Error('No access token available');
+                }
+
+                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: form
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed (${response.status}): ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log(`✅ File uploaded successfully: ${fileName} (ID: ${result.id})`);
+                
+                // Verify the file was created by checking if it exists
+                try {
+                    await gapi.client.drive.files.get({
+                        fileId: result.id,
+                        fields: 'id,name'
+                    });
+                    console.log(`✅ File verification successful: ${fileName}`);
+                } catch (verifyError) {
+                    console.warn(`⚠️ File verification failed but upload succeeded: ${fileName}`);
+                }
+                
+                return {
+                    id: result.id,
+                    name: fileName,
+                    type: file.type,
+                    size: file.size,
+                    webViewLink: result.webViewLink,
+                    webContentLink: result.webContentLink,
+                    driveFile: true,
+                    uploadDate: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                console.error(`❌ Google Drive upload error (attempt ${attempt}/${maxRetries}):`, error);
+                lastError = error;
+                
+                // Check if it's a recoverable error
+                if (error.message.includes('401') || error.message.includes('unauthorized')) {
+                    console.log('🔑 Authorization error, trying to refresh token...');
+                    try {
+                        const authInstance = gapi.auth2.getAuthInstance();
+                        if (authInstance.isSignedIn.get()) {
+                            await authInstance.currentUser.get().reloadAuthResponse();
+                            console.log('✅ Token refreshed, retrying upload...');
+                            continue;
+                        }
+                    } catch (refreshError) {
+                        console.error('❌ Token refresh failed:', refreshError);
+                    }
+                }
+                
+                // If it's the last attempt or non-recoverable error, throw
+                if (attempt === maxRetries || error.message.includes('not ready')) {
+                    throw error;
+                }
+                
+                // Wait before retrying
+                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                console.log(`⏳ Waiting ${delay}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: file.type });
-
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', blob);
-
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token}`
-                },
-                body: form
-            });
-
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`);
-            }
-
-            const result = await response.json();
-            console.log(`File uploaded successfully: ${fileName} (ID: ${result.id})`);
-            
-            return {
-                id: result.id,
-                name: fileName,
-                type: file.type,
-                size: file.size,
-                webViewLink: result.webViewLink,
-                webContentLink: result.webContentLink,
-                driveFile: true
-            };
-        } catch (error) {
-            console.error('Google Drive upload error:', error);
-            throw error;
         }
+        
+        throw lastError;
     }
 
     async downloadFileFromGoogleDrive(fileId) {
@@ -983,37 +1111,73 @@ class NoticeBoard {
         }
         console.log('✅ Configuration complete');
 
-        // Test 3: Test API key validity
-        console.log('Test 3: Testing API key...');
+        // Test 3: Test API Discovery
+        console.log('Test 3: Testing Google Drive API discovery...');
         try {
-            const testResponse = await fetch(`https://www.googleapis.com/drive/v3/about?fields=user&key=${config.apiKey}`);
-            if (!testResponse.ok) {
-                console.error('❌ API key test failed:', testResponse.status, testResponse.statusText);
-                if (testResponse.status === 400) {
-                    console.log('💡 This is normal - API key needs OAuth for user info');
-                }
+            const discoveryResponse = await fetch('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
+            if (!discoveryResponse.ok) {
+                console.error('❌ Google Drive API discovery failed:', discoveryResponse.status);
                 return false;
             }
-            console.log('✅ API key appears valid');
+            console.log('✅ Google Drive API discovery successful');
         } catch (error) {
-            console.log('⚠️  API key test inconclusive (CORS/network):', error.message);
+            console.error('❌ Google Drive API discovery test failed:', error.message);
+            return false;
         }
 
-        // Test 4: Check current domain
-        console.log('Test 4: Current domain check');
-        console.log('Current origin:', window.location.origin);
-        console.log('Current protocol:', window.location.protocol);
-        
-        if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-            console.warn('⚠️  OAuth requires HTTPS in production');
+        // Test 4: Check current Google Drive state
+        console.log('Test 4: Current Google Drive state');
+        console.log('Google Drive state:', {
+            ready: this.googleDriveReady,
+            folderId: this.googleDriveFolderId,
+            authInstance: typeof gapi !== 'undefined' && gapi.auth2 ? !!gapi.auth2.getAuthInstance() : false
+        });
+
+        if (this.googleDriveReady) {
+            console.log('✅ Google Drive is ready');
+            
+            // Test 5: Test folder access
+            console.log('Test 5: Testing folder access...');
+            try {
+                const folderResponse = await gapi.client.drive.files.get({
+                    fileId: this.googleDriveFolderId,
+                    fields: 'id,name'
+                });
+                console.log('✅ Folder access successful:', folderResponse.result.name);
+            } catch (folderError) {
+                console.error('❌ Folder access failed:', folderError);
+                return false;
+            }
+        } else {
+            console.log('⚠️ Google Drive not ready - run initializeGoogleDrive() first');
         }
 
-        console.log('🔍 Manual test completed. Check Google Cloud Console:');
-        console.log('1. Verify API key restrictions');
-        console.log('2. Check OAuth client authorized origins');
-        console.log('3. Ensure Google Drive API is enabled');
-        
         return true;
+    }
+
+    // Manual function to retry Google Drive initialization
+    async retryGoogleDriveInit() {
+        console.log('🔄 Manually retrying Google Drive initialization...');
+        this.googleDriveReady = false;
+        this.googleDriveFolderId = null;
+        this.updateSyncStatus('syncing', 'Retrying Google Drive...');
+        
+        try {
+            await this.initializeGoogleDrive();
+            if (this.googleDriveReady) {
+                console.log('✅ Google Drive retry successful');
+                this.showToast('Google Drive connected successfully', 'success');
+                return true;
+            } else {
+                console.log('❌ Google Drive retry failed');
+                this.showToast('Google Drive retry failed', 'error');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Google Drive retry error:', error);
+            this.showToast('Google Drive retry failed', 'error');
+            return false;
+        }
     }
 
     updateSyncStatus(status, message) {
