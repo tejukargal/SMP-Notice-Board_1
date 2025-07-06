@@ -1677,9 +1677,13 @@ textarea:focus-visible {
   align-items: center;
   gap: var(--spacing-xs);
   font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: var(--spacing-sm);
+}
+
+.attachment-note {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  margin-left: auto;
+  font-style: italic;
 }
 
 .attachments-header i {

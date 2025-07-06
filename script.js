@@ -458,8 +458,17 @@ class NoticeBoard {
                 const mergedNotices = cloudNotices.map(cloudNotice => {
                     const localNotice = localNoticesMap.get(cloudNotice.id);
                     
+                    // If cloud notice indicates it has local attachments, restore them from local storage
+                    if (cloudNotice.hasLocalAttachments && localNotice && localNotice.attachments) {
+                        console.log(`Restoring ${localNotice.attachments.length} attachments for notice ${cloudNotice.id}`);
+                        const restoredNotice = { ...cloudNotice, attachments: localNotice.attachments };
+                        delete restoredNotice.hasLocalAttachments;
+                        delete restoredNotice.attachmentCount;
+                        return restoredNotice;
+                    }
+                    
                     // If local notice has attachments but cloud notice doesn't, preserve local attachments
-                    if (localNotice && localNotice.attachments && !cloudNotice.attachments) {
+                    if (localNotice && localNotice.attachments && !cloudNotice.attachments && !cloudNotice.hasLocalAttachments) {
                         console.log(`Preserving attachments for notice ${cloudNotice.id}`);
                         return { ...cloudNotice, attachments: localNotice.attachments };
                     }
@@ -514,23 +523,38 @@ class NoticeBoard {
             throw new Error('JSONhost configuration invalid');
         }
 
+        // Create a copy of notices without attachments for cloud sync
+        const noticesWithoutAttachments = this.notices.map(notice => {
+            const noticeCopy = { ...notice };
+            if (notice.attachments && notice.attachments.length > 0) {
+                // Mark that this notice has local attachments
+                noticeCopy.hasLocalAttachments = true;
+                noticeCopy.attachmentCount = notice.attachments.length;
+                // Remove the actual attachment data for cloud sync
+                delete noticeCopy.attachments;
+            }
+            return noticeCopy;
+        });
+
         const data = {
-            notices: this.notices,
+            notices: noticesWithoutAttachments,
             lastUpdated: new Date().toISOString(),
             version: "1.0",
             metadata: {
                 title: "SMP College Notice Board",
                 description: "Official notices and announcements",
                 totalNotices: this.notices.length,
-                service: "jsonhost"
+                service: "jsonhost",
+                attachmentsNote: "Attachments stored locally only due to size limits"
             }
         };
 
         // Log data size and attachment info for debugging
-        const dataSize = JSON.stringify(data).length;
+        const originalSize = JSON.stringify({...data, notices: this.notices}).length;
+        const cloudSize = JSON.stringify(data).length;
         const attachmentCount = this.notices.reduce((count, notice) => 
             count + (notice.attachments ? notice.attachments.length : 0), 0);
-        console.log(`Upload data size: ${dataSize} bytes, Attachments: ${attachmentCount}`);
+        console.log(`Original size: ${originalSize} bytes, Cloud size: ${cloudSize} bytes, Attachments: ${attachmentCount}`);
 
         const jsonUrl = `${config.baseUrl}${config.jsonId}`;
         console.log('Uploading data to JSONhost:', jsonUrl);
@@ -549,8 +573,14 @@ class NoticeBoard {
             console.log('JSONhost upload response status:', response.status);
 
             if (response.ok) {
-                this.showToast('Data synced to cloud successfully', 'success');
-                this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
+                const hasAttachments = this.notices.some(notice => notice.attachments && notice.attachments.length > 0);
+                if (hasAttachments) {
+                    this.showToast('Data synced (attachments stored locally)', 'warning');
+                    this.updateSyncStatus('synced', 'JSONhost (Text only)');
+                } else {
+                    this.showToast('Data synced to cloud successfully', 'success');
+                    this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
+                }
                 return response;
             } else {
                 const errorText = await response.text();
@@ -1562,6 +1592,7 @@ class NoticeBoard {
                 <div class="attachments-header">
                     <i class="fas fa-paperclip"></i>
                     <span>Attachments (${attachments.length})</span>
+                    <small class="attachment-note">Local storage only</small>
                 </div>
                 <div class="attachments-list">
                     ${attachmentsHTML}
