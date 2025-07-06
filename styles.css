@@ -158,13 +158,20 @@ body {
 .app-title {
   font-size: var(--font-size-xl);
   font-weight: 700;
-  background: var(--primary-gradient);
+  background: linear-gradient(135deg, #64748b, #475569);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+}
+
+[data-theme="dark"] .app-title {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .sync-status {
@@ -571,18 +578,18 @@ body {
 }
 
 .filter-btn:hover {
-  background: rgba(168, 213, 226, 0.2);
-  border-color: var(--primary-color);
+  background: linear-gradient(135deg, rgba(100, 116, 139, 0.15), rgba(71, 85, 105, 0.15));
+  border-color: #64748b;
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(168, 213, 226, 0.3);
-  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.25);
+  color: #475569;
 }
 
 .filter-btn.active {
-  background: var(--primary-gradient);
-  border-color: var(--primary-color);
+  background: linear-gradient(135deg, #64748b, #475569);
+  border-color: #64748b;
   color: white;
-  box-shadow: 0 3px 8px rgba(168, 213, 226, 0.4);
+  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.4);
 }
 
 .filter-btn i {
@@ -599,13 +606,17 @@ body {
 }
 
 [data-theme="dark"] .filter-btn:hover {
-  background: rgba(168, 213, 226, 0.2);
-  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.2), rgba(100, 116, 139, 0.2));
+  border-color: #94a3b8;
+  color: #f1f5f9;
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.3);
 }
 
 [data-theme="dark"] .filter-btn.active {
-  background: var(--primary-gradient);
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  border-color: #94a3b8;
   color: white;
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.4);
 }
 
 /* Active Tags */
@@ -1951,6 +1962,26 @@ textarea:focus-visible {
   .filter-btn {
     min-height: 44px;
     min-width: 80px;
+    transition: all 0.1s ease;
+  }
+  
+  .filter-btn:active {
+    background: linear-gradient(135deg, rgba(100, 116, 139, 0.25), rgba(71, 85, 105, 0.25)) !important;
+    transform: scale(0.98);
+    box-shadow: 0 2px 6px rgba(100, 116, 139, 0.3) !important;
+  }
+  
+  .filter-btn.active:active {
+    background: linear-gradient(135deg, #475569, #334155) !important;
+    transform: scale(0.98);
+  }
+  
+  [data-theme="dark"] .filter-btn:active {
+    background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.3)) !important;
+  }
+  
+  [data-theme="dark"] .filter-btn.active:active {
+    background: linear-gradient(135deg, #64748b, #475569) !important;
   }
   
   .mobile-btn {
