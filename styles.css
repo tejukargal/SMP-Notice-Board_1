@@ -673,19 +673,20 @@ body {
 
 /* Notice Cards */
 .notice-card {
-  background: white;
-  border: 2px solid #e5e7eb;
+  background: transparent;
+  border: none;
   border-radius: var(--radius-lg);
   transition: all var(--transition-base);
   cursor: pointer;
   position: relative;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 0;
 }
 
 [data-theme="dark"] .notice-card {
-  background: #1f2937;
-  border: 2px solid #374151;
+  background: transparent;
+  border: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -732,25 +733,28 @@ body {
   position: relative;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   margin: 0;
-  /* Extend to full card width by using absolute positioning approach */
-  width: calc(100% + 4px);
-  margin-left: -2px;
-  margin-top: -2px;
-  margin-right: -2px;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-bottom: none;
+  width: 100%;
 }
 
 .notice-card-header.priority-normal {
   background: linear-gradient(135deg, #64748b, #475569);
+  border-color: #64748b;
 }
 
 .notice-card-header.priority-high {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   animation: glow-high 3s ease-in-out infinite alternate;
+  border-color: #f59e0b;
 }
 
 .notice-card-header.priority-critical {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   animation: glow-critical 2s ease-in-out infinite alternate;
+  border-color: #ef4444;
+  border-width: 3px;
 }
 
 /* Priority-based card border colors using class targeting */
@@ -842,15 +846,43 @@ body {
   color: #374151;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   margin: 0;
-  width: calc(100% + 4px);
-  margin-left: -2px;
-  margin-right: -2px;
-  margin-bottom: -2px;
+  box-sizing: border-box;
+  border: 2px solid #e5e7eb;
+  border-top: none;
+  width: 100%;
 }
 
 [data-theme="dark"] .notice-card-body {
   background: #1f2937;
   color: #f3f4f6;
+  border-color: #374151;
+}
+
+/* Priority-based borders for card body */
+.priority-normal-card .notice-card-body {
+  border-color: #64748b;
+}
+
+.priority-high-card .notice-card-body {
+  border-color: #f59e0b;
+}
+
+.priority-critical-card .notice-card-body {
+  border-color: #ef4444;
+  border-width: 3px;
+}
+
+[data-theme="dark"] .priority-normal-card .notice-card-body {
+  border-color: #64748b;
+}
+
+[data-theme="dark"] .priority-high-card .notice-card-body {
+  border-color: #f59e0b;
+}
+
+[data-theme="dark"] .priority-critical-card .notice-card-body {
+  border-color: #ef4444;
+  border-width: 3px;
 }
 
 [data-theme="dark"] .notice-card-body .notice-content {
@@ -1673,23 +1705,59 @@ body.admin-mode .fab {
     align-self: flex-end;
   }
   
-  /* Ensure seamless connection on mobile */
+  /* Mobile: Use card border instead of separate header/body borders */
+  .notice-card {
+    border: 2px solid #e5e7eb;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  
+  .priority-normal-card {
+    border-color: #64748b;
+  }
+  
+  .priority-high-card {
+    border-color: #f59e0b;
+  }
+  
+  .priority-critical-card {
+    border-color: #ef4444;
+    border-width: 3px;
+  }
+  
+  [data-theme="dark"] .notice-card {
+    border-color: #374151;
+  }
+  
+  [data-theme="dark"] .priority-normal-card {
+    border-color: #64748b;
+  }
+  
+  [data-theme="dark"] .priority-high-card {
+    border-color: #f59e0b;
+  }
+  
+  [data-theme="dark"] .priority-critical-card {
+    border-color: #ef4444;
+    border-width: 3px;
+  }
+  
   .notice-card-header {
     padding: var(--spacing-md);
-    width: calc(100% + 4px);
-    margin-left: -2px;
-    margin-top: -2px;
-    margin-right: -2px;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .notice-card-body {
     padding: var(--spacing-md);
-    width: calc(100% + 4px);
-    margin-left: -2px;
-    margin-right: -2px;
-    margin-bottom: -2px;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
   }
 }
 
@@ -1717,20 +1785,10 @@ body.admin-mode .fab {
   /* Maintain seamless connection on very small screens */
   .notice-card-header {
     padding: var(--spacing-sm);
-    width: calc(100% + 4px);
-    margin-left: -2px;
-    margin-top: -2px;
-    margin-right: -2px;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   }
   
   .notice-card-body {
     padding: var(--spacing-sm);
-    width: calc(100% + 4px);
-    margin-left: -2px;
-    margin-right: -2px;
-    margin-bottom: -2px;
-    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   }
   
   .category-filter-section {
