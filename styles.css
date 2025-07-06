@@ -207,10 +207,20 @@ body {
 
 .sync-status.developer-info {
   color: var(--text-muted);
-  font-style: italic;
+  font-style: normal;
 }
 
 .sync-status.developer-info span {
+  font-size: 0.75rem !important;
+  font-weight: 400 !important;
+}
+
+.sync-status.updates-info {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.sync-status.updates-info span {
   font-size: 0.75rem !important;
   font-weight: 400 !important;
 }

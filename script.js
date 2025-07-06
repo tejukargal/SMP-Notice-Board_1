@@ -213,6 +213,12 @@ class NoticeBoard {
                 console.log(`Loaded ${this.notices.length} notices with ${attachmentCount} attachments from localStorage`);
                 this.applyFiltersAndSort();
             }
+            
+            // Load last update time
+            const storedLastUpdate = localStorage.getItem('lastUpdateTime');
+            if (storedLastUpdate) {
+                this.lastUpdateTime = storedLastUpdate;
+            }
         } catch (error) {
             console.error('Error loading from localStorage:', error);
             this.showToast('Error loading saved notices', 'error');
@@ -487,6 +493,8 @@ class NoticeBoard {
                 });
                 
                 this.notices = mergedNotices;
+                this.lastUpdateTime = cloudData.lastUpdated; // Track when content was last changed
+                localStorage.setItem('lastUpdateTime', this.lastUpdateTime);
                 this.saveToStorage();
                 this.applyFiltersAndSort();
                 this.render();
@@ -1505,6 +1513,9 @@ class NoticeBoard {
         console.log('Saved to localStorage');
         
         // Don't let cloud upload errors prevent local saving
+        this.lastUpdateTime = new Date().toISOString();
+        localStorage.setItem('lastUpdateTime', this.lastUpdateTime);
+        
         this.uploadToCloud().catch(error => {
             console.log('Cloud upload failed, but notice saved locally:', error.message);
         });
@@ -1523,6 +1534,8 @@ class NoticeBoard {
                 ...noticeData,
                 lastModified: new Date().toISOString()
             };
+            this.lastUpdateTime = new Date().toISOString();
+            localStorage.setItem('lastUpdateTime', this.lastUpdateTime);
             this.saveToStorage();
             this.uploadToCloud();
             this.applyFiltersAndSort();
@@ -1538,6 +1551,8 @@ class NoticeBoard {
     deleteNotice(id) {
         if (confirm('Are you sure you want to delete this notice?')) {
             this.notices = this.notices.filter(notice => notice.id !== id);
+            this.lastUpdateTime = new Date().toISOString();
+            localStorage.setItem('lastUpdateTime', this.lastUpdateTime);
             this.saveToStorage();
             this.uploadToCloud();
             this.applyFiltersAndSort();
