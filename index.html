@@ -344,14 +344,14 @@
                 baseUrl: 'https://jsonhost.com/json/'
             },
             fileHosting: {
-                // pCloud - Professional cloud storage (no configuration required)
-                // Files are uploaded to pCloud and stored permanently
-                // Maximum file size: 2GB (but we limit to 10MB for UI)
+                // 0x0.st - No-bullshit file hosting (no configuration required)
+                // Files are uploaded to 0x0.st with 30 days to 1 year retention
+                // Maximum file size: 512MB (but we limit to 10MB for UI)
                 // No authentication required for public uploads
                 enabled: true,
-                service: 'pcloud.com',
+                service: '0x0.st',
                 maxFileSize: 10 * 1024 * 1024, // 10MB
-                expires: 'permanent' // Files don't expire
+                expires: '30 days to 1 year' // Retention based on file size
             },
             googledrive: {
                 // Google Drive is disabled in favor of pCloud hosting

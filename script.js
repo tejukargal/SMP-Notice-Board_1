@@ -15,8 +15,8 @@ class NoticeBoard {
         this.currentTags = [];
         this.currentAttachments = [];
         this.maxFileSize = 10 * 1024 * 1024; // 10MB
-        this.fileHostingReady = true; // file.io is always ready
-        this.fileHostingService = 'pcloud.com';
+        this.fileHostingReady = true; // 0x0.st is always ready
+        this.fileHostingService = '0x0.st';
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
         this.init();
@@ -759,30 +759,26 @@ class NoticeBoard {
 
     async initializeFileHosting() {
         console.log('🔧 File Hosting Initialization Started');
-        console.log('Using pCloud for professional file hosting');
+        console.log('Using 0x0.st for file hosting with 30 days to 1 year retention');
         
         try {
-            // Test pCloud API availability
-            const testResponse = await fetch('https://api.pcloud.com/getapiserver', {
-                method: 'GET'
+            // Test 0x0.st API availability
+            const testResponse = await fetch('https://0x0.st/', {
+                method: 'HEAD'
             });
             
             if (testResponse.ok) {
-                const result = await testResponse.json();
-                this.pcloudApiServer = result.api[0] || 'eapi.pcloud.com';
-                console.log('✅ pCloud service is available, using server:', this.pcloudApiServer);
+                console.log('✅ 0x0.st service is available');
             } else {
-                this.pcloudApiServer = 'eapi.pcloud.com'; // fallback
-                console.log('⚠️ Using fallback pCloud server');
+                console.log('⚠️ 0x0.st service check returned:', testResponse.status);
             }
             
             this.fileHostingReady = true;
-            this.showToast('File hosting ready (pCloud)', 'success');
+            this.showToast('File hosting ready (0x0.st)', 'success');
             this.updateSyncStatus('synced', 'File hosting connected');
             
         } catch (error) {
-            console.warn('⚠️ pCloud service check failed, using fallback server:', error.message);
-            this.pcloudApiServer = 'eapi.pcloud.com';
+            console.warn('⚠️ 0x0.st service check failed, but proceeding:', error.message);
             this.fileHostingReady = true;
             this.updateSyncStatus('synced', 'File hosting ready');
         }
@@ -794,7 +790,7 @@ class NoticeBoard {
         
         try {
             // Create a small test file
-            const testContent = 'This is a test file for pCloud hosting - ' + new Date().toISOString();
+            const testContent = 'This is a test file for 0x0.st hosting - ' + new Date().toISOString();
             const testBlob = new Blob([testContent], { type: 'text/plain' });
             
             const testFile = {
@@ -826,8 +822,7 @@ class NoticeBoard {
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`📤 Uploading ${fileName} to pCloud (attempt ${attempt}/${maxRetries})...`);
-                console.log(`File data preview:`, file.data ? `${file.data.substring(0, 50)}...` : 'No data found');
+                console.log(`📤 Uploading ${fileName} to 0x0.st (attempt ${attempt}/${maxRetries})...`);
                 
                 // Convert base64 to blob
                 if (!file.data) {
@@ -849,20 +844,11 @@ class NoticeBoard {
                 
                 console.log(`Blob created: ${blob.size} bytes, type: ${blob.type}`);
 
-                // Generate unique filename with timestamp
-                const timestamp = Date.now();
-                const uniqueFileName = `${timestamp}_${fileName}`;
-
-                // Create FormData for pCloud upload
+                // Create FormData for 0x0.st upload
                 const formData = new FormData();
-                formData.append('files[]', blob, uniqueFileName);
-                formData.append('folderid', '0'); // Root folder
+                formData.append('file', blob, fileName);
 
-                const apiServer = this.pcloudApiServer || 'eapi.pcloud.com';
-                const uploadUrl = `https://${apiServer}/uploadfile`;
-                console.log(`Making request to: ${uploadUrl}`);
-                
-                const response = await fetch(uploadUrl, {
+                const response = await fetch('https://0x0.st/', {
                     method: 'POST',
                     body: formData
                 });
@@ -875,42 +861,31 @@ class NoticeBoard {
                     throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
                 }
 
-                const result = await response.json();
-                console.log(`pCloud response:`, result);
+                const responseText = await response.text();
+                console.log(`0x0.st response:`, responseText);
                 
-                if (result.result !== 0) {
-                    console.error(`pCloud API error:`, result);
-                    throw new Error(`Upload failed: ${result.error || 'Unknown error'}`);
+                // 0x0.st returns just the URL as plain text
+                if (!responseText || !responseText.startsWith('https://')) {
+                    throw new Error(`Upload failed: Invalid response - ${responseText}`);
                 }
 
-                const fileData = result.metadata[0];
-                const fileId = fileData.fileid;
-                
-                // Get public link for the file
-                const linkResponse = await fetch(`https://${apiServer}/getfilepublink?fileid=${fileId}`);
-                const linkResult = await linkResponse.json();
-                
-                let publicUrl = null;
-                if (linkResult.result === 0) {
-                    publicUrl = `https://e1.pcloud.link/publink/show?code=${linkResult.code}`;
-                }
-
-                console.log(`✅ File uploaded successfully: ${fileName} (ID: ${fileId})`);
+                const fileUrl = responseText.trim();
+                console.log(`✅ File uploaded successfully: ${fileName} (URL: ${fileUrl})`);
                 
                 return {
-                    id: fileId,
+                    id: fileUrl.split('/').pop(), // Use filename from URL as ID
                     name: fileName,
                     type: file.type,
                     size: file.size,
-                    url: publicUrl || `https://${apiServer}/getpubthumb?fileid=${fileId}&size=1024x1024`,
+                    url: fileUrl,
                     hostedFile: true,
-                    service: 'pcloud.com',
+                    service: '0x0.st',
                     uploadDate: new Date().toISOString(),
-                    expires: 'permanent' // pCloud files don't expire
+                    expires: '30 days to 1 year' // 0x0.st retention based on file size
                 };
                 
             } catch (error) {
-                console.error(`❌ pCloud upload error (attempt ${attempt}/${maxRetries}):`, error);
+                console.error(`❌ 0x0.st upload error (attempt ${attempt}/${maxRetries}):`, error);
                 lastError = error;
                 
                 // If it's the last attempt, throw
