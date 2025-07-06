@@ -10,6 +10,8 @@ class NoticeBoard {
         this.quillEditor = null;
         this.syncInterval = null;
         this.lastSyncTime = null;
+        this.lastUpdateTime = null;
+        this.detailsModalTimer = null;
         this.isOnline = navigator.onLine;
         this.cloudWriteEnabled = true;
         this.currentTags = [];
@@ -1649,11 +1651,25 @@ class NoticeBoard {
         });
         
         this.detailsModal.classList.add('show');
+        
+        // Auto-hide modal after 10 seconds
+        if (this.detailsModalTimer) {
+            clearTimeout(this.detailsModalTimer);
+        }
+        this.detailsModalTimer = setTimeout(() => {
+            this.hideDetailsModal();
+        }, 10000);
     }
 
     hideDetailsModal() {
         this.detailsModal.classList.remove('show');
         this.currentDetailNotice = null;
+        
+        // Clear auto-hide timer if modal is manually closed
+        if (this.detailsModalTimer) {
+            clearTimeout(this.detailsModalTimer);
+            this.detailsModalTimer = null;
+        }
     }
 
     editCurrentNotice() {
