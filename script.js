@@ -631,12 +631,14 @@ class NoticeBoard {
                 // Try to upload to file hosting service if available and file is large enough
                 if (this.fileHostingReady && attachment.size > 50000) { // 50KB threshold
                     try {
-                        console.log(`📤 Uploading ${attachment.name} to file hosting...`);
+                        console.log(`📤 Uploading ${attachment.name} to pCloud (size: ${this.formatFileSize(attachment.size)})...`);
+                        console.log(`File hosting ready: ${this.fileHostingReady}, pCloud server: ${this.pcloudApiServer}`);
                         const hostedFile = await this.uploadFileToHosting(attachment, attachment.name);
-                        console.log(`✅ Successfully uploaded ${attachment.name} to file hosting`);
+                        console.log(`✅ Successfully uploaded ${attachment.name} to pCloud hosting`);
                         return hostedFile;
                     } catch (error) {
-                        console.error(`❌ File hosting upload failed for ${attachment.name}:`, error);
+                        console.error(`❌ pCloud upload failed for ${attachment.name}:`, error);
+                        console.error(`Error details:`, error.message, error.stack);
                         console.log(`🔄 Falling back to compression for ${attachment.name}`);
                     }
                 } else if (attachment.size <= 50000) {
@@ -825,9 +827,18 @@ class NoticeBoard {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 console.log(`📤 Uploading ${fileName} to pCloud (attempt ${attempt}/${maxRetries})...`);
+                console.log(`File data preview:`, file.data ? `${file.data.substring(0, 50)}...` : 'No data found');
                 
                 // Convert base64 to blob
+                if (!file.data) {
+                    throw new Error('No file data provided');
+                }
+                
                 const base64Data = file.data.split(',')[1];
+                if (!base64Data) {
+                    throw new Error('Invalid base64 data format');
+                }
+                
                 const byteCharacters = atob(base64Data);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) {
@@ -835,6 +846,8 @@ class NoticeBoard {
                 }
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: file.type });
+                
+                console.log(`Blob created: ${blob.size} bytes, type: ${blob.type}`);
 
                 // Generate unique filename with timestamp
                 const timestamp = Date.now();
@@ -846,18 +859,27 @@ class NoticeBoard {
                 formData.append('folderid', '0'); // Root folder
 
                 const apiServer = this.pcloudApiServer || 'eapi.pcloud.com';
-                const response = await fetch(`https://${apiServer}/uploadfile`, {
+                const uploadUrl = `https://${apiServer}/uploadfile`;
+                console.log(`Making request to: ${uploadUrl}`);
+                
+                const response = await fetch(uploadUrl, {
                     method: 'POST',
                     body: formData
                 });
 
+                console.log(`Response status: ${response.status} ${response.statusText}`);
+                
                 if (!response.ok) {
-                    throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+                    const errorText = await response.text();
+                    console.error(`Upload error response:`, errorText);
+                    throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
                 }
 
                 const result = await response.json();
+                console.log(`pCloud response:`, result);
                 
                 if (result.result !== 0) {
+                    console.error(`pCloud API error:`, result);
                     throw new Error(`Upload failed: ${result.error || 'Unknown error'}`);
                 }
 

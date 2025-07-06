@@ -1,19 +1,19 @@
-# File Hosting Setup Guide (tmpfiles.org)
+# File Hosting Setup Guide (pCloud)
 
 ## Overview
 
-This guide explains the simplified file hosting system for the SMP College Notice Board application. We've replaced the complex Google Drive integration with **tmpfiles.org** - a stable, reliable file hosting service that requires no configuration or authentication.
+This guide explains the simplified file hosting system for the SMP College Notice Board application. We've replaced the complex Google Drive integration with **pCloud** - a professional cloud storage service that requires no configuration or authentication.
 
-## What is tmpfiles.org?
+## What is pCloud?
 
-tmpfiles.org is a professional temporary file sharing service that provides:
+pCloud is a professional cloud storage service that provides:
 - **No Authentication Required**: Upload files without any setup
-- **100MB File Size Limit**: Much larger than previous 5MB limit
+- **2GB File Size Limit**: Much larger than previous services
 - **Direct URLs**: Files get permanent URLs for easy access
-- **Auto-Expiration**: Files automatically delete after 30 days
+- **Permanent Storage**: Files don't expire automatically
 - **Cross-Device Sync**: Works perfectly across all devices
 - **Zero Configuration**: No API keys, OAuth, or complex setup needed
-- **Stable Service**: More reliable than file.io (not owned by LimeWire)
+- **Professional Service**: Reliable cloud storage with 99.9% uptime
 
 ## ✅ Key Advantages
 
