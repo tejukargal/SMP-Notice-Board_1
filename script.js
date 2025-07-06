@@ -772,6 +772,15 @@ class NoticeBoard {
             return;
         }
 
+        // Validate client ID format
+        if (!config.clientId.includes('.apps.googleusercontent.com')) {
+            console.error('❌ Invalid OAuth Client ID format. Should end with .apps.googleusercontent.com');
+            console.log('Example: 123456789012-abcdefg.apps.googleusercontent.com');
+            console.log('Current clientId:', config.clientId);
+            this.showToast('Invalid Google OAuth Client ID format', 'error');
+            return;
+        }
+
         try {
             console.log('Step 1: Loading Google API...');
             
@@ -820,14 +829,18 @@ class NoticeBoard {
             
             // Provide specific error messages
             let errorMessage = 'Google Drive initialization failed';
-            if (error.message.includes('API key')) {
+            const errorMsg = error.message || error.error || '';
+            
+            if (errorMsg.includes('API key') || errorMsg.includes('invalid_request')) {
                 errorMessage = 'Invalid Google Drive API key';
-            } else if (error.message.includes('client')) {
-                errorMessage = 'Invalid OAuth client ID';
-            } else if (error.message.includes('origin')) {
+            } else if (errorMsg.includes('client') || errorMsg.includes('unauthorized_client')) {
+                errorMessage = 'Invalid OAuth client ID or unauthorized domain';
+            } else if (errorMsg.includes('origin') || errorMsg.includes('redirect_uri')) {
                 errorMessage = 'Domain not authorized for Google API';
-            } else if (error.message.includes('not loaded')) {
+            } else if (errorMsg.includes('not loaded')) {
                 errorMessage = 'Google API script not loaded';
+            } else if (error.status === 401) {
+                errorMessage = 'Google OAuth unauthorized - check client ID and domain';
             }
             
             this.showToast(errorMessage, 'error');
