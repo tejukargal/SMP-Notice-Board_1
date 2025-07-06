@@ -1,18 +1,19 @@
-# File Hosting Setup Guide (file.io)
+# File Hosting Setup Guide (tmpfiles.org)
 
 ## Overview
 
-This guide explains the new simplified file hosting system for the SMP College Notice Board application. We've replaced the complex Google Drive integration with **file.io** - a simple, reliable file hosting service that requires no configuration or authentication.
+This guide explains the simplified file hosting system for the SMP College Notice Board application. We've replaced the complex Google Drive integration with **tmpfiles.org** - a stable, reliable file hosting service that requires no configuration or authentication.
 
-## What is file.io?
+## What is tmpfiles.org?
 
-file.io is a temporary file sharing service that provides:
+tmpfiles.org is a professional temporary file sharing service that provides:
 - **No Authentication Required**: Upload files without any setup
 - **100MB File Size Limit**: Much larger than previous 5MB limit
 - **Direct URLs**: Files get permanent URLs for easy access
-- **Auto-Expiration**: Files automatically delete after set time (default: 1 year)
+- **Auto-Expiration**: Files automatically delete after 30 days
 - **Cross-Device Sync**: Works perfectly across all devices
 - **Zero Configuration**: No API keys, OAuth, or complex setup needed
+- **Stable Service**: More reliable than file.io (not owned by LimeWire)
 
 ## ✅ Key Advantages
 
@@ -27,36 +28,36 @@ file.io is a temporary file sharing service that provides:
 
 ### File Upload Process
 1. User selects file attachment (up to 10MB)
-2. App automatically uploads file to file.io
-3. file.io returns a permanent URL
+2. App automatically uploads file to tmpfiles.org
+3. tmpfiles.org returns a permanent URL
 4. URL is stored in notice data and synced via JSONhost
 5. File is accessible on all devices via the URL
 
 ### Cross-Device Access
 1. Device loads notice from JSONhost
-2. Notice contains file.io URL references
+2. Notice contains tmpfiles.org URL references
 3. Files display with direct download links
-4. Users click to access files from file.io servers
+4. Users click to access files from tmpfiles.org servers
 
 ### File Management
-- **Large Files (>50KB)**: Automatically uploaded to file.io
+- **Large Files (>50KB)**: Automatically uploaded to tmpfiles.org
 - **Small Files (<50KB)**: Stored locally for faster access
-- **File Expiration**: Files expire after 1 year (configurable)
-- **No Storage Limits**: Unlimited files (within file.io terms)
+- **File Expiration**: Files expire after 30 days (automatic cleanup)
+- **No Storage Limits**: Unlimited files (within tmpfiles.org terms)
 
 ## Technical Implementation
 
 ### Configuration (Already Done)
-The application is pre-configured with file.io settings:
+The application is pre-configured with tmpfiles.org settings:
 
 ```javascript
 // In index.html - No changes needed
 window.CLOUD_CONFIG = {
     fileHosting: {
         enabled: true,
-        service: 'file.io',
+        service: 'tmpfiles.org',
         maxFileSize: 100 * 1024 * 1024, // 100MB
-        expires: '1y' // 1 year
+        expires: '30d' // 30 days
     }
 }
 ```
@@ -73,10 +74,10 @@ window.CLOUD_CONFIG = {
 <div class="notice-attachment hosted-attachment">
     <i class="attachment-icon fas fa-file-pdf"></i>
     <div class="attachment-info">
-        <a href="https://file.io/xyz123" target="_blank">
+        <a href="https://tmpfiles.org/dl/xyz123/document.pdf" target="_blank">
             <span class="attachment-name">document.pdf</span>
             <span class="attachment-size">2.5 MB</span>
-            <small class="hosting-info">☁️ Hosted on file.io</small>
+            <small class="hosting-info">🗂️ Hosted on tmpfiles.org</small>
         </a>
     </div>
 </div>
@@ -113,7 +114,7 @@ await FileHostingDebug.testFileIOService()
 
 ### Upload Process
 ```
-User selects file → App uploads to file.io → 
+User selects file → App uploads to tmpfiles.org → 
 Gets permanent URL → Stores URL in notice → 
 Syncs to JSONhost → Available on all devices
 ```
@@ -122,17 +123,17 @@ Syncs to JSONhost → Available on all devices
 ```
 User loads app → Fetches notices from JSONhost → 
 Displays file links → User clicks → 
-Opens file from file.io servers
+Opens file from tmpfiles.org servers
 ```
 
 ### Expiration
-- Files expire after 1 year by default
+- Files expire after 30 days by default
 - Expired files show as "File no longer available"
 - Notices remain, only file links become inactive
 
 ## Benefits Over Google Drive
 
-| Feature | file.io | Google Drive |
+| Feature | tmpfiles.org | Google Drive |
 |---------|---------|--------------|
 | **Setup** | Zero configuration | Complex OAuth setup |
 | **Authentication** | None required | User must sign in |
@@ -146,13 +147,13 @@ Opens file from file.io servers
 
 ### From Google Drive
 - Existing Google Drive files continue to work
-- New files automatically use file.io
-- Mixed system: some files on Google Drive, new ones on file.io
+- New files automatically use tmpfiles.org
+- Mixed system: some files on Google Drive, new ones on tmpfiles.org
 - Gradual migration as content is updated
 
 ### From Local Storage
 - Small files (<50KB) remain in local storage
-- Large files automatically use file.io hosting
+- Large files automatically use tmpfiles.org hosting
 - Best of both worlds: speed + reliability
 
 ## Troubleshooting

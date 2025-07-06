@@ -344,21 +344,21 @@
                 baseUrl: 'https://jsonhost.com/json/'
             },
             fileHosting: {
-                // file.io - Simple file hosting (no configuration required)
-                // Files are uploaded to file.io and expire after 1 year
-                // Maximum file size: 100MB
-                // No authentication required
+                // pCloud - Professional cloud storage (no configuration required)
+                // Files are uploaded to pCloud and stored permanently
+                // Maximum file size: 2GB (but we limit to 10MB for UI)
+                // No authentication required for public uploads
                 enabled: true,
-                service: 'file.io',
-                maxFileSize: 100 * 1024 * 1024, // 100MB
-                expires: '1y' // 1 year
+                service: 'pcloud.com',
+                maxFileSize: 10 * 1024 * 1024, // 10MB
+                expires: 'permanent' // Files don't expire
             },
             googledrive: {
-                // Google Drive is disabled in favor of simpler file.io hosting
+                // Google Drive is disabled in favor of pCloud hosting
                 // To re-enable: set enabled to true and configure API credentials
                 apiKey: '', // Your Google Drive API key
                 clientId: '', // Your OAuth 2.0 client ID
-                enabled: false, // Disabled - using file.io instead
+                enabled: false, // Disabled - using pCloud instead
                 folderName: 'SMP-Notice-Board-Attachments'
             }
         };

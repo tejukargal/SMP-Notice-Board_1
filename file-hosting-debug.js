@@ -128,20 +128,30 @@ window.FileHostingDebug = {
         }
     },
     
-    // Test file.io service directly
-    async testFileIOService() {
-        console.log('🌐 Testing file.io service directly...');
+    // Test pCloud service directly
+    async testPCloudService() {
+        console.log('🌐 Testing pCloud service directly...');
         
         try {
+            // First get API server
+            const serverResponse = await fetch('https://api.pcloud.com/getapiserver');
+            if (!serverResponse.ok) {
+                throw new Error('Failed to get pCloud API server');
+            }
+            
+            const serverResult = await serverResponse.json();
+            const apiServer = serverResult.api[0] || 'eapi.pcloud.com';
+            console.log('Using pCloud server:', apiServer);
+            
             // Create a test file
-            const testContent = 'File.io test - ' + new Date().toISOString();
+            const testContent = 'pCloud test - ' + new Date().toISOString();
             const blob = new Blob([testContent], { type: 'text/plain' });
             
             const formData = new FormData();
-            formData.append('file', blob, 'fileio-test.txt');
-            formData.append('expires', '1h'); // 1 hour expiry for test
+            formData.append('files[]', blob, 'pcloud-test.txt');
+            formData.append('folderid', '0');
             
-            const response = await fetch('https://file.io', {
+            const response = await fetch(`https://${apiServer}/uploadfile`, {
                 method: 'POST',
                 body: formData
             });
@@ -151,11 +161,11 @@ window.FileHostingDebug = {
             }
             
             const result = await response.json();
-            console.log('✅ file.io service test successful:', result);
+            console.log('✅ pCloud service test successful:', result);
             return result;
             
         } catch (error) {
-            console.error('❌ file.io service test failed:', error);
+            console.error('❌ pCloud service test failed:', error);
             return false;
         }
     }
@@ -172,7 +182,7 @@ if (document.readyState === 'loading') {
             console.log('- FileHostingDebug.retryInit() - Retry initialization');
             console.log('- FileHostingDebug.testFileUpload() - Test file upload');
             console.log('- FileHostingDebug.getHostedFiles() - Get hosted files info');
-            console.log('- FileHostingDebug.testFileIOService() - Test file.io directly');
+            console.log('- FileHostingDebug.testPCloudService() - Test pCloud directly');
         }, 1000);
     });
 } else {
@@ -184,6 +194,6 @@ if (document.readyState === 'loading') {
         console.log('- FileHostingDebug.retryInit() - Retry initialization');
         console.log('- FileHostingDebug.testFileUpload() - Test file upload');
         console.log('- FileHostingDebug.getHostedFiles() - Get hosted files info');
-        console.log('- FileHostingDebug.testFileIOService() - Test file.io directly');
+        console.log('- FileHostingDebug.testPCloudService() - Test pCloud directly');
     }, 1000);
 }

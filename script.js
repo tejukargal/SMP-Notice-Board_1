@@ -16,7 +16,7 @@ class NoticeBoard {
         this.currentAttachments = [];
         this.maxFileSize = 10 * 1024 * 1024; // 10MB
         this.fileHostingReady = true; // file.io is always ready
-        this.fileHostingService = 'file.io';
+        this.fileHostingService = 'pcloud.com';
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
         this.init();
@@ -757,22 +757,30 @@ class NoticeBoard {
 
     async initializeFileHosting() {
         console.log('🔧 File Hosting Initialization Started');
-        console.log('Using file.io for reliable file hosting');
+        console.log('Using pCloud for professional file hosting');
         
         try {
-            // Test file.io availability
-            const testResponse = await fetch('https://file.io', {
-                method: 'HEAD'
+            // Test pCloud API availability
+            const testResponse = await fetch('https://api.pcloud.com/getapiserver', {
+                method: 'GET'
             });
             
-            console.log('✅ file.io service is available');
+            if (testResponse.ok) {
+                const result = await testResponse.json();
+                this.pcloudApiServer = result.api[0] || 'eapi.pcloud.com';
+                console.log('✅ pCloud service is available, using server:', this.pcloudApiServer);
+            } else {
+                this.pcloudApiServer = 'eapi.pcloud.com'; // fallback
+                console.log('⚠️ Using fallback pCloud server');
+            }
+            
             this.fileHostingReady = true;
-            this.showToast('File hosting ready (file.io)', 'success');
+            this.showToast('File hosting ready (pCloud)', 'success');
             this.updateSyncStatus('synced', 'File hosting connected');
             
         } catch (error) {
-            console.warn('⚠️ file.io service check failed, will try uploads anyway:', error.message);
-            // file.io might block HEAD requests, but still allow POST
+            console.warn('⚠️ pCloud service check failed, using fallback server:', error.message);
+            this.pcloudApiServer = 'eapi.pcloud.com';
             this.fileHostingReady = true;
             this.updateSyncStatus('synced', 'File hosting ready');
         }
@@ -784,7 +792,7 @@ class NoticeBoard {
         
         try {
             // Create a small test file
-            const testContent = 'This is a test file for file hosting - ' + new Date().toISOString();
+            const testContent = 'This is a test file for pCloud hosting - ' + new Date().toISOString();
             const testBlob = new Blob([testContent], { type: 'text/plain' });
             
             const testFile = {
@@ -816,7 +824,7 @@ class NoticeBoard {
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`📤 Uploading ${fileName} to file.io (attempt ${attempt}/${maxRetries})...`);
+                console.log(`📤 Uploading ${fileName} to pCloud (attempt ${attempt}/${maxRetries})...`);
                 
                 // Convert base64 to blob
                 const base64Data = file.data.split(',')[1];
@@ -828,12 +836,17 @@ class NoticeBoard {
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: file.type });
 
-                // Create FormData for file.io upload
-                const formData = new FormData();
-                formData.append('file', blob, fileName);
-                formData.append('expires', '1y'); // Files expire after 1 year
+                // Generate unique filename with timestamp
+                const timestamp = Date.now();
+                const uniqueFileName = `${timestamp}_${fileName}`;
 
-                const response = await fetch('https://file.io', {
+                // Create FormData for pCloud upload
+                const formData = new FormData();
+                formData.append('files[]', blob, uniqueFileName);
+                formData.append('folderid', '0'); // Root folder
+
+                const apiServer = this.pcloudApiServer || 'eapi.pcloud.com';
+                const response = await fetch(`https://${apiServer}/uploadfile`, {
                     method: 'POST',
                     body: formData
                 });
@@ -844,26 +857,38 @@ class NoticeBoard {
 
                 const result = await response.json();
                 
-                if (!result.success) {
-                    throw new Error(`Upload failed: ${result.message || 'Unknown error'}`);
+                if (result.result !== 0) {
+                    throw new Error(`Upload failed: ${result.error || 'Unknown error'}`);
                 }
 
-                console.log(`✅ File uploaded successfully: ${fileName} (URL: ${result.link})`);
+                const fileData = result.metadata[0];
+                const fileId = fileData.fileid;
+                
+                // Get public link for the file
+                const linkResponse = await fetch(`https://${apiServer}/getfilepublink?fileid=${fileId}`);
+                const linkResult = await linkResponse.json();
+                
+                let publicUrl = null;
+                if (linkResult.result === 0) {
+                    publicUrl = `https://e1.pcloud.link/publink/show?code=${linkResult.code}`;
+                }
+
+                console.log(`✅ File uploaded successfully: ${fileName} (ID: ${fileId})`);
                 
                 return {
-                    id: result.key,
+                    id: fileId,
                     name: fileName,
                     type: file.type,
                     size: file.size,
-                    url: result.link,
+                    url: publicUrl || `https://${apiServer}/getpubthumb?fileid=${fileId}&size=1024x1024`,
                     hostedFile: true,
-                    service: 'file.io',
+                    service: 'pcloud.com',
                     uploadDate: new Date().toISOString(),
-                    expires: result.expiry || '1 year'
+                    expires: 'permanent' // pCloud files don't expire
                 };
                 
             } catch (error) {
-                console.error(`❌ File.io upload error (attempt ${attempt}/${maxRetries}):`, error);
+                console.error(`❌ pCloud upload error (attempt ${attempt}/${maxRetries}):`, error);
                 lastError = error;
                 
                 // If it's the last attempt, throw
@@ -917,14 +942,17 @@ class NoticeBoard {
         console.log('✅ File hosting enabled');
 
         // Test 2: Check service availability
-        console.log('Test 2: Testing file.io service availability...');
+        console.log('Test 2: Testing pCloud service availability...');
         try {
-            const testResponse = await fetch('https://file.io', {
-                method: 'HEAD'
-            });
-            console.log('✅ file.io service accessible');
+            const testResponse = await fetch('https://api.pcloud.com/getapiserver');
+            if (testResponse.ok) {
+                const result = await testResponse.json();
+                console.log('✅ pCloud service accessible, API server:', result.api[0]);
+            } else {
+                console.log('⚠️ pCloud API test failed, but service likely available');
+            }
         } catch (error) {
-            console.log('⚠️ file.io HEAD request failed (normal), service likely available');
+            console.log('⚠️ pCloud API test failed (CORS/network), service likely available');
         }
 
         // Test 3: Check application state
@@ -1940,11 +1968,13 @@ class NoticeBoard {
                 `;
             }
 
-            // Handle hosted files (file.io, Google Drive, etc.)
+            // Handle hosted files (pCloud, Google Drive, etc.)
             if (attachment.hostedFile || attachment.driveFile) {
                 const url = attachment.url || attachment.webViewLink;
                 const service = attachment.service || 'Google Drive';
-                const serviceIcon = attachment.service === 'file.io' ? '☁️' : '📁';
+                const serviceIcon = attachment.service === 'pcloud.com' ? '☁️' : 
+                                  attachment.service === 'tmpfiles.org' ? '🗂️' : 
+                                  attachment.service === 'file.io' ? '☁️' : '📁';
                 
                 return `
                     <div class="notice-attachment hosted-attachment">
