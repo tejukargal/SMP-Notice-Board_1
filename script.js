@@ -52,7 +52,6 @@ class NoticeBoard {
         this.addNoticeBtn = document.getElementById('addNoticeBtn');
 
         // Mobile controls
-        this.mobileFilter = document.getElementById('mobileFilter');
         this.mobileAdd = document.getElementById('mobileAdd');
 
         // Modals
@@ -112,7 +111,7 @@ class NoticeBoard {
         this.mobileAdd.addEventListener('click', () => this.showNoticeModal());
 
         // Mobile controls
-        this.mobileFilter.addEventListener('click', () => this.showMobileFilters());
+        // Mobile filter removed - no longer needed
 
         // Form submission
         this.noticeForm.addEventListener('submit', (e) => this.handleFormSubmit(e));
@@ -1851,7 +1850,7 @@ class NoticeBoard {
 
     showMobileFilters() {
         // Toggle mobile filter panel (implement as needed)
-        this.mobileFilter.classList.toggle('active');
+        // Mobile filter removed - no longer needed
     }
 
     handleOutsideClick(e) {
@@ -1921,40 +1920,24 @@ class NoticeBoard {
     }
 
     processContentWithURLs(content) {
-        // First, process the HTML content to detect and extract URLs
+        // Process HTML content to detect and convert URLs to clickable links inline
         let processedContent = content;
-        const urls = [];
         
         // URL regex pattern to detect various URL formats
         const urlRegex = /(https?:\/\/[^\s<>"]+|www\.[^\s<>"]+|[^\s<>"]+\.[a-z]{2,}(?:\/[^\s<>"]*)?)/gi;
         
-        // Extract URLs and replace them with placeholders
+        // Convert URLs to clickable links inline (preserve context and positioning)
         processedContent = processedContent.replace(urlRegex, (url) => {
             let href = url;
             // Add https:// if missing
             if (!url.startsWith('http://') && !url.startsWith('https://')) {
                 href = 'https://' + url;
             }
-            urls.push({ original: url, href: href });
-            return `<span class="url-placeholder">${url}</span>`;
+            // Create inline clickable link that preserves the URL text and position
+            return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="notice-link">
+                        <i class="fas fa-external-link-alt"></i> ${url}
+                    </a>`;
         });
-        
-        // If URLs were found, create a separate URLs section
-        if (urls.length > 0) {
-            const urlsSection = `
-                <div class="notice-urls">
-                    ${urls.map(urlData => 
-                        `<a href="${urlData.href}" target="_blank" rel="noopener noreferrer" class="notice-link">
-                            <i class="fas fa-external-link-alt"></i> ${urlData.original}
-                        </a>`
-                    ).join('')}
-                </div>
-            `;
-            
-            // Remove placeholder spans and add URLs section at the end
-            processedContent = processedContent.replace(/<span class="url-placeholder">.*?<\/span>/g, '');
-            processedContent += urlsSection;
-        }
         
         return processedContent;
     }
