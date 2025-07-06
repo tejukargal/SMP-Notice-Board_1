@@ -1586,7 +1586,7 @@ body.admin-mode .fab {
   }
   
   .notice-card {
-    padding: var(--spacing-md);
+    padding: 0;
   }
   
   .mobile-controls {
@@ -1705,11 +1705,12 @@ body.admin-mode .fab {
     align-self: flex-end;
   }
   
-  /* Mobile: Use card border instead of separate header/body borders */
+  /* Mobile: Remove all padding/margins and make header fill entire card */
   .notice-card {
     border: 2px solid #e5e7eb;
     border-radius: var(--radius-lg);
     overflow: hidden;
+    padding: 0 !important;
   }
   
   .priority-normal-card {
@@ -1745,16 +1746,19 @@ body.admin-mode .fab {
   .notice-card-header {
     padding: var(--spacing-md);
     border: none;
-    border-radius: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     margin: 0;
     width: 100%;
     box-sizing: border-box;
+    position: relative;
+    top: 0;
+    left: 0;
   }
   
   .notice-card-body {
     padding: var(--spacing-md);
     border: none;
-    border-radius: 0;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     margin: 0;
     width: 100%;
     box-sizing: border-box;
