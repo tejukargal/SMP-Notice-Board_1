@@ -1686,6 +1686,22 @@ textarea:focus-visible {
   font-style: italic;
 }
 
+.placeholder-attachment {
+  opacity: 0.7;
+  border: 1px dashed var(--border-color);
+}
+
+.placeholder-attachment .attachment-icon {
+  color: var(--text-muted);
+}
+
+.compression-info {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  display: block;
+  margin-top: 2px;
+}
+
 .attachments-header i {
   color: var(--primary-color);
 }

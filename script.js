@@ -454,22 +454,30 @@ class NoticeBoard {
                 // Create a map of local notices for quick lookup
                 const localNoticesMap = new Map(this.notices.map(notice => [notice.id, notice]));
                 
-                // Merge cloud notices with local attachments
+                // Merge cloud notices with local attachments, handling compressed/placeholder attachments
                 const mergedNotices = cloudNotices.map(cloudNotice => {
                     const localNotice = localNoticesMap.get(cloudNotice.id);
                     
-                    // If cloud notice indicates it has local attachments, restore them from local storage
-                    if (cloudNotice.hasLocalAttachments && localNotice && localNotice.attachments) {
-                        console.log(`Restoring ${localNotice.attachments.length} attachments for notice ${cloudNotice.id}`);
-                        const restoredNotice = { ...cloudNotice, attachments: localNotice.attachments };
-                        delete restoredNotice.hasLocalAttachments;
-                        delete restoredNotice.attachmentCount;
-                        return restoredNotice;
+                    // If both have attachments, merge them intelligently
+                    if (cloudNotice.attachments && localNotice && localNotice.attachments) {
+                        const mergedAttachments = cloudNotice.attachments.map(cloudAttachment => {
+                            // If it's a placeholder, try to restore from local
+                            if (cloudAttachment.isPlaceholder) {
+                                const localAttachment = localNotice.attachments.find(la => la.name === cloudAttachment.name);
+                                if (localAttachment) {
+                                    console.log(`Restoring full file from local: ${cloudAttachment.name}`);
+                                    return localAttachment;
+                                }
+                            }
+                            return cloudAttachment;
+                        });
+                        
+                        return { ...cloudNotice, attachments: mergedAttachments };
                     }
                     
                     // If local notice has attachments but cloud notice doesn't, preserve local attachments
-                    if (localNotice && localNotice.attachments && !cloudNotice.attachments && !cloudNotice.hasLocalAttachments) {
-                        console.log(`Preserving attachments for notice ${cloudNotice.id}`);
+                    if (localNotice && localNotice.attachments && !cloudNotice.attachments) {
+                        console.log(`Preserving local attachments for notice ${cloudNotice.id}`);
                         return { ...cloudNotice, attachments: localNotice.attachments };
                     }
                     
@@ -523,29 +531,18 @@ class NoticeBoard {
             throw new Error('JSONhost configuration invalid');
         }
 
-        // Create a copy of notices without attachments for cloud sync
-        const noticesWithoutAttachments = this.notices.map(notice => {
-            const noticeCopy = { ...notice };
-            if (notice.attachments && notice.attachments.length > 0) {
-                // Mark that this notice has local attachments
-                noticeCopy.hasLocalAttachments = true;
-                noticeCopy.attachmentCount = notice.attachments.length;
-                // Remove the actual attachment data for cloud sync
-                delete noticeCopy.attachments;
-            }
-            return noticeCopy;
-        });
+        // Optimize notices for cloud sync by compressing attachments
+        const optimizedNotices = await this.optimizeNoticesForCloud(this.notices);
 
         const data = {
-            notices: noticesWithoutAttachments,
+            notices: optimizedNotices,
             lastUpdated: new Date().toISOString(),
             version: "1.0",
             metadata: {
                 title: "SMP College Notice Board",
                 description: "Official notices and announcements",
                 totalNotices: this.notices.length,
-                service: "jsonhost",
-                attachmentsNote: "Attachments stored locally only due to size limits"
+                service: "jsonhost"
             }
         };
 
@@ -554,7 +551,7 @@ class NoticeBoard {
         const cloudSize = JSON.stringify(data).length;
         const attachmentCount = this.notices.reduce((count, notice) => 
             count + (notice.attachments ? notice.attachments.length : 0), 0);
-        console.log(`Original size: ${originalSize} bytes, Cloud size: ${cloudSize} bytes, Attachments: ${attachmentCount}`);
+        console.log(`Original size: ${(originalSize/1024/1024).toFixed(2)}MB, Cloud size: ${(cloudSize/1024/1024).toFixed(2)}MB, Attachments: ${attachmentCount}`);
 
         const jsonUrl = `${config.baseUrl}${config.jsonId}`;
         console.log('Uploading data to JSONhost:', jsonUrl);
@@ -573,14 +570,8 @@ class NoticeBoard {
             console.log('JSONhost upload response status:', response.status);
 
             if (response.ok) {
-                const hasAttachments = this.notices.some(notice => notice.attachments && notice.attachments.length > 0);
-                if (hasAttachments) {
-                    this.showToast('Data synced (attachments stored locally)', 'warning');
-                    this.updateSyncStatus('synced', 'JSONhost (Text only)');
-                } else {
-                    this.showToast('Data synced to cloud successfully', 'success');
-                    this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
-                }
+                this.showToast('Data synced to cloud successfully', 'success');
+                this.updateSyncStatus('synced', 'JSONhost (Read/Write)');
                 return response;
             } else {
                 const errorText = await response.text();
@@ -603,6 +594,106 @@ class NoticeBoard {
             
             throw fetchError;
         }
+    }
+
+    async optimizeNoticesForCloud(notices) {
+        console.log('Optimizing notices for cloud sync...');
+        
+        const optimizedNotices = await Promise.all(notices.map(async notice => {
+            if (!notice.attachments || notice.attachments.length === 0) {
+                return notice;
+            }
+
+            console.log(`Optimizing ${notice.attachments.length} attachments for notice: ${notice.title}`);
+            
+            const optimizedAttachments = await Promise.all(notice.attachments.map(async attachment => {
+                // Skip if attachment is already small enough
+                if (attachment.size < 500000) { // 500KB
+                    return attachment;
+                }
+
+                // Compress images
+                if (attachment.type.startsWith('image/')) {
+                    console.log(`Compressing image: ${attachment.name} (${this.formatFileSize(attachment.size)})`);
+                    return await this.compressImage(attachment);
+                }
+
+                // For non-image files larger than 1MB, create a placeholder
+                if (attachment.size > 1048576) { // 1MB
+                    console.log(`Large file detected: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating placeholder`);
+                    return {
+                        name: attachment.name,
+                        type: attachment.type,
+                        size: attachment.size,
+                        isPlaceholder: true,
+                        originalSize: attachment.size,
+                        note: 'File too large for cloud sync - available locally only'
+                    };
+                }
+
+                return attachment;
+            }));
+
+            return { ...notice, attachments: optimizedAttachments };
+        }));
+
+        console.log('Notice optimization completed');
+        return optimizedNotices;
+    }
+
+    async compressImage(attachment) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // Calculate new dimensions (max 1920x1080)
+                let { width, height } = img;
+                const maxWidth = 1920;
+                const maxHeight = 1080;
+
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                // Draw and compress
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Try different quality levels until we get a reasonable size
+                let quality = 0.7;
+                let compressedData;
+                
+                do {
+                    compressedData = canvas.toDataURL(attachment.type, quality);
+                    quality -= 0.1;
+                } while (compressedData.length > 800000 && quality > 0.1); // Target ~800KB max
+
+                const compressedSize = Math.round(compressedData.length * 0.75); // Approximate actual size
+                
+                console.log(`Image compressed: ${attachment.name} ${this.formatFileSize(attachment.size)} → ${this.formatFileSize(compressedSize)}`);
+                
+                resolve({
+                    ...attachment,
+                    data: compressedData,
+                    size: compressedSize,
+                    compressed: true,
+                    originalSize: attachment.size
+                });
+            };
+            
+            img.onerror = () => {
+                console.log(`Failed to compress image: ${attachment.name}, using original`);
+                resolve(attachment);
+            };
+            
+            img.src = attachment.data;
+        });
     }
 
     updateSyncStatus(status, message) {
@@ -1560,14 +1651,32 @@ class NoticeBoard {
             const icon = this.getFileIcon(attachment.type);
             const size = this.formatFileSize(attachment.size);
             
+            // Handle placeholder attachments
+            if (attachment.isPlaceholder) {
+                return `
+                    <div class="notice-attachment placeholder-attachment">
+                        <i class="attachment-icon ${icon}"></i>
+                        <div class="attachment-info">
+                            <span class="attachment-name">${attachment.name}</span>
+                            <span class="attachment-size">${size}</span>
+                            <small class="attachment-note">${attachment.note}</small>
+                        </div>
+                    </div>
+                `;
+            }
+            
             if (attachment.type.startsWith('image/')) {
-                // Display images inline
+                // Display images inline with compression info
+                const compressionInfo = attachment.compressed ? 
+                    `<small class="compression-info">Compressed (${this.formatFileSize(attachment.originalSize)} → ${size})</small>` : '';
+                
                 return `
                     <div class="notice-attachment image-attachment">
                         <img src="${attachment.data}" alt="${attachment.name}" class="attachment-image" loading="lazy">
                         <div class="attachment-info">
                             <span class="attachment-name">${attachment.name}</span>
                             <span class="attachment-size">${size}</span>
+                            ${compressionInfo}
                         </div>
                     </div>
                 `;
@@ -1592,7 +1701,6 @@ class NoticeBoard {
                 <div class="attachments-header">
                     <i class="fas fa-paperclip"></i>
                     <span>Attachments (${attachments.length})</span>
-                    <small class="attachment-note">Local storage only</small>
                 </div>
                 <div class="attachments-list">
                     ${attachmentsHTML}
