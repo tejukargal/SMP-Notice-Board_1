@@ -753,16 +753,19 @@ body {
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-md);
   font-weight: 500;
+  color: white;
 }
 
 .deadline-info.deadline-overdue {
-  background: rgba(239, 68, 68, 0.3);
-  color: #fef2f2;
+  background: rgba(239, 68, 68, 0.4);
+  color: white;
+  font-weight: 600;
 }
 
 .deadline-info.deadline-approaching {
-  background: rgba(245, 158, 11, 0.3);
-  color: #fffbeb;
+  background: rgba(245, 158, 11, 0.4);
+  color: white;
+  font-weight: 600;
 }
 
 /* Card Body */
