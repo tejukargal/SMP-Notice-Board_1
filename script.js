@@ -206,6 +206,9 @@ class NoticeBoard {
             const storedNotices = localStorage.getItem('college-notices');
             if (storedNotices) {
                 this.notices = JSON.parse(storedNotices);
+                const attachmentCount = this.notices.reduce((count, notice) => 
+                    count + (notice.attachments ? notice.attachments.length : 0), 0);
+                console.log(`Loaded ${this.notices.length} notices with ${attachmentCount} attachments from localStorage`);
                 this.applyFiltersAndSort();
             }
         } catch (error) {
@@ -217,11 +220,21 @@ class NoticeBoard {
     saveToStorage() {
         try {
             console.log('Saving to localStorage, notices count:', this.notices.length);
-            localStorage.setItem('college-notices', JSON.stringify(this.notices));
+            const dataStr = JSON.stringify(this.notices);
+            const dataSize = dataStr.length;
+            const attachmentCount = this.notices.reduce((count, notice) => 
+                count + (notice.attachments ? notice.attachments.length : 0), 0);
+            console.log(`Saving ${dataSize} bytes, ${attachmentCount} attachments`);
+            
+            localStorage.setItem('college-notices', dataStr);
             console.log('Successfully saved to localStorage');
         } catch (error) {
             console.error('Error saving to localStorage:', error);
-            this.showToast('Error saving notices locally', 'error');
+            if (error.name === 'QuotaExceededError') {
+                this.showToast('Storage quota exceeded - attachments too large', 'error');
+            } else {
+                this.showToast('Error saving notices locally', 'error');
+            }
         }
     }
 
@@ -434,13 +447,31 @@ class NoticeBoard {
             console.log('Local last updated:', localLastUpdated);
             console.log('Should update:', cloudLastUpdated > localLastUpdated);
 
-            // Always update on first sync (when lastSyncTime is null)
+            // Smart merge: preserve local attachments if cloud data lacks them
             if (!this.lastSyncTime || cloudLastUpdated > localLastUpdated) {
-                console.log('Updating local data with cloud data');
-                this.notices = cloudNotices;
+                console.log('Merging cloud data with local data');
+                
+                // Create a map of local notices for quick lookup
+                const localNoticesMap = new Map(this.notices.map(notice => [notice.id, notice]));
+                
+                // Merge cloud notices with local attachments
+                const mergedNotices = cloudNotices.map(cloudNotice => {
+                    const localNotice = localNoticesMap.get(cloudNotice.id);
+                    
+                    // If local notice has attachments but cloud notice doesn't, preserve local attachments
+                    if (localNotice && localNotice.attachments && !cloudNotice.attachments) {
+                        console.log(`Preserving attachments for notice ${cloudNotice.id}`);
+                        return { ...cloudNotice, attachments: localNotice.attachments };
+                    }
+                    
+                    return cloudNotice;
+                });
+                
+                this.notices = mergedNotices;
                 this.saveToStorage();
                 this.applyFiltersAndSort();
                 this.render();
+                console.log('Data merged successfully');
             } else {
                 console.log('Local data is up to date');
             }
@@ -1092,7 +1123,12 @@ class NoticeBoard {
         `;
         
         document.getElementById('noticeMeta').innerHTML = metaHTML;
-        document.getElementById('noticeContentDisplay').innerHTML = notice.content;
+        
+        // Process content with URLs and add attachments display
+        const processedContent = this.processContentWithURLs(notice.content);
+        const attachmentsHTML = this.createAttachmentsDisplay(notice.attachments);
+        
+        document.getElementById('noticeContentDisplay').innerHTML = processedContent + attachmentsHTML;
         
         // Show/hide admin buttons
         const adminButtons = document.querySelectorAll('#detailsModal .admin-only');
