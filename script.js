@@ -14,9 +14,9 @@ class NoticeBoard {
         this.cloudWriteEnabled = true;
         this.currentTags = [];
         this.currentAttachments = [];
-        this.maxFileSize = 5 * 1024 * 1024; // 5MB
-        this.googleDriveReady = false;
-        this.googleDriveFolderId = null;
+        this.maxFileSize = 10 * 1024 * 1024; // 10MB
+        this.fileHostingReady = true; // file.io is always ready
+        this.fileHostingService = 'file.io';
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
         this.init();
@@ -30,7 +30,7 @@ class NoticeBoard {
         this.loadFromStorage();
         this.checkAdminStatus();
         this.initializeCloudSync();
-        this.initializeGoogleDrive();
+        this.initializeFileHosting();
         this.applyTheme();
         this.render();
         // Removed automatic sync polling - only sync on page load and manual refresh
@@ -622,49 +622,25 @@ class NoticeBoard {
             console.log(`Processing ${notice.attachments.length} attachments for notice: ${notice.title}`);
             
             const optimizedAttachments = await Promise.all(notice.attachments.map(async attachment => {
-                // If it's already a Google Drive file, validate it's still accessible
-                if (attachment.driveFile) {
-                    if (this.googleDriveReady && attachment.id) {
-                        try {
-                            // Verify the file still exists and is accessible
-                            await gapi.client.drive.files.get({
-                                fileId: attachment.id,
-                                fields: 'id,name,trashed'
-                            });
-                            console.log(`✅ Google Drive file verified: ${attachment.name}`);
-                            return attachment;
-                        } catch (error) {
-                            console.warn(`⚠️ Google Drive file no longer accessible: ${attachment.name} (${error.message})`);
-                            // Convert to placeholder if file is no longer accessible
-                            return {
-                                name: attachment.name,
-                                type: attachment.type || 'application/octet-stream',
-                                size: attachment.size || 0,
-                                isPlaceholder: true,
-                                originalSize: attachment.size || 0,
-                                note: 'Google Drive file no longer accessible'
-                            };
-                        }
-                    } else if (!this.googleDriveReady) {
-                        console.log(`ℹ️ Google Drive not ready, keeping reference: ${attachment.name}`);
-                        return attachment;
-                    }
+                // If it's already a hosted file, keep the reference
+                if (attachment.hostedFile || attachment.driveFile) {
+                    console.log(`✅ File already hosted: ${attachment.name}`);
                     return attachment;
                 }
 
-                // Try to upload to Google Drive if available
-                if (this.googleDriveReady && this.googleDriveFolderId) {
+                // Try to upload to file hosting service if available and file is large enough
+                if (this.fileHostingReady && attachment.size > 50000) { // 50KB threshold
                     try {
-                        console.log(`✅ Google Drive ready, uploading ${attachment.name} to Google Drive...`);
-                        const driveFile = await this.uploadFileToGoogleDrive(attachment, attachment.name);
-                        console.log(`✅ Successfully uploaded ${attachment.name} to Google Drive`);
-                        return driveFile;
+                        console.log(`📤 Uploading ${attachment.name} to file hosting...`);
+                        const hostedFile = await this.uploadFileToHosting(attachment, attachment.name);
+                        console.log(`✅ Successfully uploaded ${attachment.name} to file hosting`);
+                        return hostedFile;
                     } catch (error) {
-                        console.error(`❌ Google Drive upload failed for ${attachment.name}:`, error);
+                        console.error(`❌ File hosting upload failed for ${attachment.name}:`, error);
                         console.log(`🔄 Falling back to compression for ${attachment.name}`);
                     }
-                } else {
-                    console.log(`⚠️ Google Drive not ready (ready: ${this.googleDriveReady}, folder: ${!!this.googleDriveFolderId}), using compression for ${attachment.name}`);
+                } else if (attachment.size <= 50000) {
+                    console.log(`📁 Small file ${attachment.name}, keeping locally`);
                 }
 
                 // Fallback to compression method if Google Drive not available
@@ -779,199 +755,69 @@ class NoticeBoard {
         });
     }
 
-    async initializeGoogleDrive() {
-        const config = window.CLOUD_CONFIG?.googledrive;
+    async initializeFileHosting() {
+        console.log('🔧 File Hosting Initialization Started');
+        console.log('Using file.io for reliable file hosting');
         
-        console.log('🔧 Google Drive Initialization Started');
-        console.log('Configuration check:', {
-            configExists: !!config,
-            enabled: config?.enabled,
-            hasApiKey: !!config?.apiKey,
-            hasClientId: !!config?.clientId,
-            apiKeyStart: config?.apiKey?.substring(0, 10) + '...',
-            clientIdStart: config?.clientId?.substring(0, 15) + '...'
-        });
-
-        if (!config || !config.enabled || !config.apiKey || !config.clientId) {
-            console.log('ℹ️ Google Drive not properly configured - attachments will use compression method');
-            console.log('Required: enabled=true, apiKey, clientId');
-            this.showToast('Google Drive not configured - using local storage', 'info');
-            return;
-        }
-
-        // Validate client ID format
-        if (!config.clientId.includes('.apps.googleusercontent.com')) {
-            console.error('❌ Invalid OAuth Client ID format. Should end with .apps.googleusercontent.com');
-            console.log('Example: 123456789012-abcdefg.apps.googleusercontent.com');
-            console.log('Current clientId:', config.clientId);
-            this.showToast('Invalid Google OAuth Client ID format', 'error');
-            return;
-        }
-
         try {
-            console.log('📡 Step 1: Loading Google API...');
+            // Test file.io availability
+            const testResponse = await fetch('https://file.io', {
+                method: 'HEAD'
+            });
             
-            // Check if gapi is available
-            if (typeof gapi === 'undefined') {
-                throw new Error('Google API (gapi) not loaded. Check if Google API script is included.');
-            }
-
-            // Load Google API with timeout
-            await Promise.race([
-                new Promise((resolve, reject) => {
-                    console.log('🔄 Step 2: Loading gapi client and auth2...');
-                    gapi.load('client:auth2', {
-                        callback: resolve,
-                        onerror: (error) => {
-                            console.error('gapi.load error:', error);
-                            reject(new Error('Failed to load Google API client'));
-                        }
-                    });
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Google API loading timeout')), 15000)
-                )
-            ]);
-
-            console.log('⚙️ Step 3: Initializing gapi client...');
-            await Promise.race([
-                gapi.client.init({
-                    apiKey: config.apiKey,
-                    clientId: config.clientId,
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-                    scope: 'https://www.googleapis.com/auth/drive.file'
-                }),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Google API initialization timeout')), 10000)
-                )
-            ]);
-
-            console.log('🔐 Step 4: Checking authentication status...');
-            const authInstance = gapi.auth2.getAuthInstance();
-            console.log('Auth instance created:', !!authInstance);
-
-            // Check if user needs to sign in - make this non-blocking
-            if (!authInstance.isSignedIn.get()) {
-                console.log('🔑 User not signed in, prompting for authentication...');
-                try {
-                    await Promise.race([
-                        authInstance.signIn(),
-                        new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Sign-in timeout')), 30000)
-                        )
-                    ]);
-                } catch (authError) {
-                    console.warn('⚠️ Authentication failed or cancelled:', authError.message);
-                    if (authError.error === 'popup_closed_by_user') {
-                        this.showToast('Google Drive sign-in cancelled', 'warning');
-                    } else {
-                        this.showToast('Google Drive authentication failed', 'error');
-                    }
-                    return;
-                }
-            }
-
-            console.log('📁 Step 5: Creating/finding Drive folder...');
-            this.googleDriveReady = true;
-            await this.createOrFindDriveFolder();
-            
-            console.log('✅ Google Drive initialized successfully');
-            this.showToast('Google Drive storage ready', 'success');
-            
-            // Update sync status
-            this.updateSyncStatus('synced', 'Google Drive connected');
+            console.log('✅ file.io service is available');
+            this.fileHostingReady = true;
+            this.showToast('File hosting ready (file.io)', 'success');
+            this.updateSyncStatus('synced', 'File hosting connected');
             
         } catch (error) {
-            console.error('❌ Failed to initialize Google Drive:');
-            console.error('Error type:', error.constructor.name);
-            console.error('Error message:', error.message);
-            console.error('Full error:', error);
-            
-            // Reset Google Drive state
-            this.googleDriveReady = false;
-            this.googleDriveFolderId = null;
-            
-            // Provide specific error messages
-            let errorMessage = 'Google Drive initialization failed';
-            const errorMsg = error.message || error.error || '';
-            
-            if (errorMsg.includes('API key') || errorMsg.includes('invalid_request')) {
-                errorMessage = 'Invalid Google Drive API key - check console for details';
-            } else if (errorMsg.includes('client') || errorMsg.includes('unauthorized_client')) {
-                errorMessage = 'Invalid OAuth client ID or unauthorized domain';
-            } else if (errorMsg.includes('origin') || errorMsg.includes('redirect_uri')) {
-                errorMessage = 'Domain not authorized for Google API';
-            } else if (errorMsg.includes('not loaded')) {
-                errorMessage = 'Google API script not loaded';
-            } else if (errorMsg.includes('timeout')) {
-                errorMessage = 'Google Drive connection timeout';
-            } else if (error.status === 401) {
-                errorMessage = 'Google OAuth unauthorized - check client ID and domain';
-            } else if (error.status === 403) {
-                errorMessage = 'Google Drive API access forbidden - check API key';
-            }
-            
-            this.showToast(errorMessage, 'error');
-            this.updateSyncStatus('error', 'Google Drive failed');
-            console.log('🔄 Falling back to compression method for attachments');
+            console.warn('⚠️ file.io service check failed, will try uploads anyway:', error.message);
+            // file.io might block HEAD requests, but still allow POST
+            this.fileHostingReady = true;
+            this.updateSyncStatus('synced', 'File hosting ready');
         }
     }
 
-    async createOrFindDriveFolder() {
-        const config = window.CLOUD_CONFIG.googledrive;
+    // Test file hosting upload functionality
+    async testFileHosting() {
+        console.log('🧪 Testing file hosting functionality...');
+        
         try {
-            // Search for existing folder
-            const response = await gapi.client.drive.files.list({
-                q: `name='${config.folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-                fields: 'files(id, name)'
-            });
-
-            if (response.result.files.length > 0) {
-                this.googleDriveFolderId = response.result.files[0].id;
-                console.log('Found existing Google Drive folder:', this.googleDriveFolderId);
-            } else {
-                // Create new folder
-                const createResponse = await gapi.client.drive.files.create({
-                    resource: {
-                        name: config.folderName,
-                        mimeType: 'application/vnd.google-apps.folder'
-                    },
-                    fields: 'id'
-                });
-                this.googleDriveFolderId = createResponse.result.id;
-                console.log('Created new Google Drive folder:', this.googleDriveFolderId);
-            }
+            // Create a small test file
+            const testContent = 'This is a test file for file hosting - ' + new Date().toISOString();
+            const testBlob = new Blob([testContent], { type: 'text/plain' });
+            
+            const testFile = {
+                name: 'test-upload.txt',
+                type: 'text/plain',
+                size: testBlob.size,
+                data: `data:text/plain;base64,${btoa(testContent)}`
+            };
+            
+            const result = await this.uploadFileToHosting(testFile, testFile.name);
+            console.log('✅ Test upload successful:', result);
+            this.showToast('File hosting test successful', 'success');
+            return result;
+            
         } catch (error) {
-            console.error('Error with Google Drive folder:', error);
+            console.error('❌ File hosting test failed:', error);
+            this.showToast('File hosting test failed', 'error');
             throw error;
         }
     }
 
-    async uploadFileToGoogleDrive(file, fileName) {
-        if (!this.googleDriveReady || !this.googleDriveFolderId) {
-            throw new Error('Google Drive not ready');
+    async uploadFileToHosting(file, fileName) {
+        if (!this.fileHostingReady) {
+            throw new Error('File hosting not ready');
         }
 
-        // Add retry logic for better reliability
-        let lastError;
         const maxRetries = 3;
+        let lastError;
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                console.log(`📤 Uploading ${fileName} to Google Drive (attempt ${attempt}/${maxRetries})...`);
+                console.log(`📤 Uploading ${fileName} to file.io (attempt ${attempt}/${maxRetries})...`);
                 
-                // Check if user is still signed in
-                const authInstance = gapi.auth2.getAuthInstance();
-                if (!authInstance.isSignedIn.get()) {
-                    console.log('🔐 User not signed in, attempting to sign in...');
-                    await authInstance.signIn();
-                }
-
-                const metadata = {
-                    name: fileName,
-                    parents: [this.googleDriveFolderId]
-                };
-
                 // Convert base64 to blob
                 const base64Data = file.data.split(',')[1];
                 const byteCharacters = atob(base64Data);
@@ -982,78 +828,50 @@ class NoticeBoard {
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: file.type });
 
-                const form = new FormData();
-                form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                form.append('file', blob);
+                // Create FormData for file.io upload
+                const formData = new FormData();
+                formData.append('file', blob, fileName);
+                formData.append('expires', '1y'); // Files expire after 1 year
 
-                const accessToken = authInstance.currentUser.get().getAuthResponse().access_token;
-                if (!accessToken) {
-                    throw new Error('No access token available');
-                }
-
-                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink', {
+                const response = await fetch('https://file.io', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                    },
-                    body: form
+                    body: formData
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Upload failed (${response.status}): ${errorText}`);
+                    throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
                 }
 
                 const result = await response.json();
-                console.log(`✅ File uploaded successfully: ${fileName} (ID: ${result.id})`);
                 
-                // Verify the file was created by checking if it exists
-                try {
-                    await gapi.client.drive.files.get({
-                        fileId: result.id,
-                        fields: 'id,name'
-                    });
-                    console.log(`✅ File verification successful: ${fileName}`);
-                } catch (verifyError) {
-                    console.warn(`⚠️ File verification failed but upload succeeded: ${fileName}`);
+                if (!result.success) {
+                    throw new Error(`Upload failed: ${result.message || 'Unknown error'}`);
                 }
+
+                console.log(`✅ File uploaded successfully: ${fileName} (URL: ${result.link})`);
                 
                 return {
-                    id: result.id,
+                    id: result.key,
                     name: fileName,
                     type: file.type,
                     size: file.size,
-                    webViewLink: result.webViewLink,
-                    webContentLink: result.webContentLink,
-                    driveFile: true,
-                    uploadDate: new Date().toISOString()
+                    url: result.link,
+                    hostedFile: true,
+                    service: 'file.io',
+                    uploadDate: new Date().toISOString(),
+                    expires: result.expiry || '1 year'
                 };
                 
             } catch (error) {
-                console.error(`❌ Google Drive upload error (attempt ${attempt}/${maxRetries}):`, error);
+                console.error(`❌ File.io upload error (attempt ${attempt}/${maxRetries}):`, error);
                 lastError = error;
                 
-                // Check if it's a recoverable error
-                if (error.message.includes('401') || error.message.includes('unauthorized')) {
-                    console.log('🔑 Authorization error, trying to refresh token...');
-                    try {
-                        const authInstance = gapi.auth2.getAuthInstance();
-                        if (authInstance.isSignedIn.get()) {
-                            await authInstance.currentUser.get().reloadAuthResponse();
-                            console.log('✅ Token refreshed, retrying upload...');
-                            continue;
-                        }
-                    } catch (refreshError) {
-                        console.error('❌ Token refresh failed:', refreshError);
-                    }
-                }
-                
-                // If it's the last attempt or non-recoverable error, throw
-                if (attempt === maxRetries || error.message.includes('not ready')) {
+                // If it's the last attempt, throw
+                if (attempt === maxRetries) {
                     throw error;
                 }
                 
-                // Wait before retrying
+                // Wait before retrying with exponential backoff
                 const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
                 console.log(`⏳ Waiting ${delay}ms before retry...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
@@ -1063,119 +881,92 @@ class NoticeBoard {
         throw lastError;
     }
 
-    async downloadFileFromGoogleDrive(fileId) {
-        if (!this.googleDriveReady) {
-            throw new Error('Google Drive not ready');
+    // File hosting service provides direct URLs, no download function needed
+    getFileUrl(attachment) {
+        if (attachment.hostedFile && attachment.url) {
+            return attachment.url;
         }
-
-        try {
-            const response = await gapi.client.drive.files.get({
-                fileId: fileId,
-                alt: 'media'
-            });
-
-            return response.body;
-        } catch (error) {
-            console.error('Google Drive download error:', error);
-            throw error;
+        if (attachment.driveFile && attachment.webViewLink) {
+            return attachment.webViewLink;
         }
+        if (attachment.data) {
+            return attachment.data; // Base64 data URL
+        }
+        return null;
     }
 
-    // Debug function to test Google Drive setup manually
-    async testGoogleDriveSetup() {
-        console.log('🔍 Manual Google Drive Setup Test');
-        console.log('================================');
+    // Debug function to test file hosting setup
+    async debugFileHosting() {
+        console.log('🔍 File Hosting Debug Test');
+        console.log('==========================');
         
-        // Test 1: Check if Google API script is loaded
-        console.log('Test 1: Google API script loading');
-        if (typeof gapi === 'undefined') {
-            console.error('❌ Google API (gapi) not found. Check if the script is loaded.');
-            console.log('Expected script: https://apis.google.com/js/api.js');
-            return false;
-        }
-        console.log('✅ Google API script loaded');
-
-        // Test 2: Check configuration
-        const config = window.CLOUD_CONFIG?.googledrive;
-        console.log('Test 2: Configuration check');
+        // Test 1: Check configuration
+        const config = window.CLOUD_CONFIG?.fileHosting;
+        console.log('Test 1: Configuration check');
         console.log('Config:', {
             exists: !!config,
             enabled: config?.enabled,
-            apiKey: config?.apiKey ? config.apiKey.substring(0, 10) + '...' : 'MISSING',
-            clientId: config?.clientId ? config.clientId.substring(0, 15) + '...' : 'MISSING'
+            service: config?.service,
+            maxFileSize: config?.maxFileSize
         });
 
-        if (!config?.enabled || !config?.apiKey || !config?.clientId) {
-            console.error('❌ Configuration incomplete');
+        if (!config?.enabled) {
+            console.error('❌ File hosting not enabled');
             return false;
         }
-        console.log('✅ Configuration complete');
+        console.log('✅ File hosting enabled');
 
-        // Test 3: Test API Discovery
-        console.log('Test 3: Testing Google Drive API discovery...');
+        // Test 2: Check service availability
+        console.log('Test 2: Testing file.io service availability...');
         try {
-            const discoveryResponse = await fetch('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
-            if (!discoveryResponse.ok) {
-                console.error('❌ Google Drive API discovery failed:', discoveryResponse.status);
-                return false;
-            }
-            console.log('✅ Google Drive API discovery successful');
+            const testResponse = await fetch('https://file.io', {
+                method: 'HEAD'
+            });
+            console.log('✅ file.io service accessible');
         } catch (error) {
-            console.error('❌ Google Drive API discovery test failed:', error.message);
-            return false;
+            console.log('⚠️ file.io HEAD request failed (normal), service likely available');
         }
 
-        // Test 4: Check current Google Drive state
-        console.log('Test 4: Current Google Drive state');
-        console.log('Google Drive state:', {
-            ready: this.googleDriveReady,
-            folderId: this.googleDriveFolderId,
-            authInstance: typeof gapi !== 'undefined' && gapi.auth2 ? !!gapi.auth2.getAuthInstance() : false
+        // Test 3: Check application state
+        console.log('Test 3: Application state');
+        console.log('File hosting state:', {
+            ready: this.fileHostingReady,
+            service: this.fileHostingService,
+            maxFileSize: this.maxFileSize
         });
 
-        if (this.googleDriveReady) {
-            console.log('✅ Google Drive is ready');
-            
-            // Test 5: Test folder access
-            console.log('Test 5: Testing folder access...');
-            try {
-                const folderResponse = await gapi.client.drive.files.get({
-                    fileId: this.googleDriveFolderId,
-                    fields: 'id,name'
-                });
-                console.log('✅ Folder access successful:', folderResponse.result.name);
-            } catch (folderError) {
-                console.error('❌ Folder access failed:', folderError);
-                return false;
-            }
-        } else {
-            console.log('⚠️ Google Drive not ready - run initializeGoogleDrive() first');
+        // Test 4: Test actual upload
+        console.log('Test 4: Testing file upload...');
+        try {
+            const result = await this.testFileHosting();
+            console.log('✅ File upload test successful:', result.url);
+            return true;
+        } catch (error) {
+            console.error('❌ File upload test failed:', error);
+            return false;
         }
-
-        return true;
     }
 
-    // Manual function to retry Google Drive initialization
-    async retryGoogleDriveInit() {
-        console.log('🔄 Manually retrying Google Drive initialization...');
-        this.googleDriveReady = false;
-        this.googleDriveFolderId = null;
-        this.updateSyncStatus('syncing', 'Retrying Google Drive...');
+    // Manual function to retry file hosting initialization
+    async retryFileHosting() {
+        console.log('🔄 Manually retrying file hosting initialization...');
+        this.fileHostingReady = false;
+        this.updateSyncStatus('syncing', 'Retrying file hosting...');
         
         try {
-            await this.initializeGoogleDrive();
-            if (this.googleDriveReady) {
-                console.log('✅ Google Drive retry successful');
-                this.showToast('Google Drive connected successfully', 'success');
+            await this.initializeFileHosting();
+            if (this.fileHostingReady) {
+                console.log('✅ File hosting retry successful');
+                this.showToast('File hosting connected successfully', 'success');
                 return true;
             } else {
-                console.log('❌ Google Drive retry failed');
-                this.showToast('Google Drive retry failed', 'error');
+                console.log('❌ File hosting retry failed');
+                this.showToast('File hosting retry failed', 'error');
                 return false;
             }
         } catch (error) {
-            console.error('❌ Google Drive retry error:', error);
-            this.showToast('Google Drive retry failed', 'error');
+            console.error('❌ File hosting retry error:', error);
+            this.showToast('File hosting retry failed', 'error');
             return false;
         }
     }
@@ -2149,16 +1940,20 @@ class NoticeBoard {
                 `;
             }
 
-            // Handle Google Drive files
-            if (attachment.driveFile) {
+            // Handle hosted files (file.io, Google Drive, etc.)
+            if (attachment.hostedFile || attachment.driveFile) {
+                const url = attachment.url || attachment.webViewLink;
+                const service = attachment.service || 'Google Drive';
+                const serviceIcon = attachment.service === 'file.io' ? '☁️' : '📁';
+                
                 return `
-                    <div class="notice-attachment drive-attachment">
+                    <div class="notice-attachment hosted-attachment">
                         <i class="attachment-icon ${icon}"></i>
                         <div class="attachment-info">
-                            <a href="${attachment.webViewLink}" target="_blank" class="attachment-link">
+                            <a href="${url}" target="_blank" class="attachment-link" rel="noopener noreferrer">
                                 <span class="attachment-name">${attachment.name}</span>
                                 <span class="attachment-size">${size}</span>
-                                <small class="drive-info">📁 Stored in Google Drive</small>
+                                <small class="hosting-info">${serviceIcon} Hosted on ${service}</small>
                             </a>
                         </div>
                     </div>
