@@ -15,7 +15,7 @@ class NoticeBoard {
         this.currentTags = [];
         this.currentAttachments = [];
         this.maxFileSize = 10 * 1024 * 1024; // 10MB
-        this.fileHostingReady = true; // 0x0.st is always ready
+        this.fileHostingReady = false; // External hosting disabled due to CORS
         this.fileHostingService = '0x0.st';
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
@@ -30,7 +30,7 @@ class NoticeBoard {
         this.loadFromStorage();
         this.checkAdminStatus();
         this.initializeCloudSync();
-        this.initializeFileHosting();
+        // this.initializeFileHosting(); // Disabled - using local compression instead
         this.applyTheme();
         this.render();
         // Removed automatic sync polling - only sync on page load and manual refresh
@@ -612,7 +612,8 @@ class NoticeBoard {
     }
 
     async optimizeNoticesForCloud(notices) {
-        console.log('Optimizing notices for cloud sync...');
+        console.log('🔧 Optimizing notices for cloud sync...');
+        console.log(`🔧 File hosting status: ready=${this.fileHostingReady}, service=${this.fileHostingService}`);
         
         const optimizedNotices = await Promise.all(notices.map(async notice => {
             if (!notice.attachments || notice.attachments.length === 0) {
@@ -628,60 +629,61 @@ class NoticeBoard {
                     return attachment;
                 }
 
-                // Try to upload to file hosting service if available and file is large enough
-                if (this.fileHostingReady && attachment.size > 50000) { // 50KB threshold
-                    try {
-                        console.log(`📤 Uploading ${attachment.name} to pCloud (size: ${this.formatFileSize(attachment.size)})...`);
-                        console.log(`File hosting ready: ${this.fileHostingReady}, pCloud server: ${this.pcloudApiServer}`);
-                        const hostedFile = await this.uploadFileToHosting(attachment, attachment.name);
-                        console.log(`✅ Successfully uploaded ${attachment.name} to pCloud hosting`);
-                        return hostedFile;
-                    } catch (error) {
-                        console.error(`❌ pCloud upload failed for ${attachment.name}:`, error);
-                        console.error(`Error details:`, error.message, error.stack);
-                        console.log(`🔄 Falling back to compression for ${attachment.name}`);
-                    }
-                } else if (attachment.size <= 50000) {
-                    console.log(`📁 Small file ${attachment.name}, keeping locally`);
-                }
+                // Skip external file hosting due to CORS restrictions
+                // Most file hosting services don't support browser CORS uploads
+                console.log(`📁 Processing file ${attachment.name} (${this.formatFileSize(attachment.size)}) for cloud sync...`);
 
-                // Fallback to compression method if Google Drive not available
-                // For files under 50KB, include directly
-                if (attachment.size < 51200) { // 50KB
-                    console.log(`Small file ${attachment.name}, including directly`);
+                // For small files (under 100KB), include directly in cloud sync
+                if (attachment.size < 102400) { // 100KB - increased threshold
+                    console.log(`✅ Small file ${attachment.name}, including directly in cloud sync`);
                     return attachment;
                 }
 
-                // Compress images
+                // For images, try aggressive compression
                 if (attachment.type.startsWith('image/')) {
-                    console.log(`Compressing image: ${attachment.name} (${this.formatFileSize(attachment.size)})`);
+                    console.log(`🖼️ Compressing image: ${attachment.name} (${this.formatFileSize(attachment.size)})`);
                     const compressed = await this.compressImage(attachment);
                     
-                    // If compressed image is still too large for JSONhost, create placeholder
-                    if (compressed.size > 80000) { // 80KB limit for JSONhost safety
-                        console.log(`Compressed image still too large (${this.formatFileSize(compressed.size)}), creating placeholder`);
+                    // If compressed image is under 200KB, include it
+                    if (compressed.size < 204800) { // 200KB limit for compressed images
+                        console.log(`✅ Compressed image fits: ${attachment.name} (${this.formatFileSize(compressed.size)})`);
+                        return compressed;
+                    } else {
+                        console.log(`⚠️ Compressed image still large: ${attachment.name} (${this.formatFileSize(compressed.size)}), creating reference`);
                         return {
                             name: attachment.name,
                             type: attachment.type,
                             size: attachment.size,
                             isPlaceholder: true,
                             originalSize: attachment.size,
-                            note: 'File too large for cloud sync - available locally only'
+                            note: 'Large image - compressed version available locally',
+                            thumbnailData: compressed.data // Include compressed version as thumbnail
                         };
                     }
-                    
-                    return compressed;
                 }
 
-                // For all other files larger than 50KB, create a placeholder
-                console.log(`Large file detected: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating placeholder`);
+                // For PDFs and documents, create a reference but keep locally
+                if (attachment.type.includes('pdf') || attachment.type.includes('document') || attachment.type.includes('text')) {
+                    console.log(`📄 Large document: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating reference`);
+                    return {
+                        name: attachment.name,
+                        type: attachment.type,
+                        size: attachment.size,
+                        isPlaceholder: true,
+                        originalSize: attachment.size,
+                        note: 'Large document - available locally only'
+                    };
+                }
+
+                // For all other large files, create a placeholder
+                console.log(`📦 Large file: ${attachment.name} (${this.formatFileSize(attachment.size)}) - creating reference`);
                 return {
                     name: attachment.name,
                     type: attachment.type,
                     size: attachment.size,
                     isPlaceholder: true,
                     originalSize: attachment.size,
-                    note: 'File too large for cloud sync - available locally only'
+                    note: 'Large file - available locally only'
                 };
             }));
 
@@ -699,10 +701,10 @@ class NoticeBoard {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
 
-                // Calculate new dimensions (max 1920x1080)
+                // Start with more aggressive dimensions for better compression
                 let { width, height } = img;
-                const maxWidth = 1920;
-                const maxHeight = 1080;
+                const maxWidth = 1280; // Reduced from 1920
+                const maxHeight = 720; // Reduced from 1080
 
                 if (width > maxWidth || height > maxHeight) {
                     const ratio = Math.min(maxWidth / width, maxHeight / height);
@@ -712,27 +714,34 @@ class NoticeBoard {
 
                 canvas.width = width;
                 canvas.height = height;
-
-                // Draw and compress
                 ctx.drawImage(img, 0, 0, width, height);
-                
-                // Try different quality levels until we get a reasonable size for JSONhost
-                let quality = 0.7;
+
+                // Try different quality and dimension combinations
                 let compressedData;
+                let attempts = 0;
+                const maxAttempts = 5;
                 
-                do {
-                    compressedData = canvas.toDataURL('image/jpeg', quality); // Force JPEG for better compression
-                    quality -= 0.1;
-                } while (compressedData.length > 100000 && quality > 0.1); // Target ~100KB for JSONhost
+                // Start with moderate quality
+                let quality = 0.6;
+                compressedData = canvas.toDataURL('image/jpeg', quality);
                 
-                // If still too large, try smaller dimensions
-                if (compressedData.length > 100000 && quality <= 0.1) {
-                    const smallerWidth = Math.floor(width * 0.7);
-                    const smallerHeight = Math.floor(height * 0.7);
-                    canvas.width = smallerWidth;
-                    canvas.height = smallerHeight;
-                    ctx.drawImage(img, 0, 0, smallerWidth, smallerHeight);
-                    compressedData = canvas.toDataURL('image/jpeg', 0.5);
+                // If too large, progressively reduce quality and size
+                while (compressedData.length > 204800 && attempts < maxAttempts) { // Target 200KB
+                    attempts++;
+                    
+                    if (attempts <= 2) {
+                        // First, try reducing quality
+                        quality = Math.max(0.2, quality - 0.2);
+                        compressedData = canvas.toDataURL('image/jpeg', quality);
+                    } else {
+                        // Then reduce dimensions
+                        width = Math.floor(width * 0.8);
+                        height = Math.floor(height * 0.8);
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        compressedData = canvas.toDataURL('image/jpeg', 0.4);
+                    }
                 }
 
                 const compressedSize = Math.round(compressedData.length * 0.75); // Approximate actual size

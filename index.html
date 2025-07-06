@@ -344,14 +344,14 @@
                 baseUrl: 'https://jsonhost.com/json/'
             },
             fileHosting: {
-                // 0x0.st - No-bullshit file hosting (no configuration required)
-                // Files are uploaded to 0x0.st with 30 days to 1 year retention
-                // Maximum file size: 512MB (but we limit to 10MB for UI)
-                // No authentication required for public uploads
-                enabled: true,
-                service: '0x0.st',
+                // External file hosting disabled due to CORS restrictions
+                // Files are now handled with local compression and cloud sync
+                // Small files (<100KB) sync directly, large files compressed
+                // Images aggressively compressed to fit in cloud storage
+                enabled: false,
+                service: 'local-compression',
                 maxFileSize: 10 * 1024 * 1024, // 10MB
-                expires: '30 days to 1 year' // Retention based on file size
+                expires: 'permanent' // Files stored in JSONhost
             },
             googledrive: {
                 // Google Drive is disabled in favor of pCloud hosting
