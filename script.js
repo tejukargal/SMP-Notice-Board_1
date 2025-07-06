@@ -15,6 +15,8 @@ class NoticeBoard {
         this.currentTags = [];
         this.currentAttachments = [];
         this.maxFileSize = 5 * 1024 * 1024; // 5MB
+        this.googleDriveReady = false;
+        this.googleDriveFolderId = null;
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
         this.init();
@@ -28,6 +30,7 @@ class NoticeBoard {
         this.loadFromStorage();
         this.checkAdminStatus();
         this.initializeCloudSync();
+        this.initializeGoogleDrive();
         this.applyTheme();
         this.render();
         // Removed automatic sync polling - only sync on page load and manual refresh
@@ -604,9 +607,26 @@ class NoticeBoard {
                 return notice;
             }
 
-            console.log(`Optimizing ${notice.attachments.length} attachments for notice: ${notice.title}`);
+            console.log(`Processing ${notice.attachments.length} attachments for notice: ${notice.title}`);
             
             const optimizedAttachments = await Promise.all(notice.attachments.map(async attachment => {
+                // If it's already a Google Drive file, keep the reference
+                if (attachment.driveFile) {
+                    return attachment;
+                }
+
+                // Try to upload to Google Drive if available
+                if (this.googleDriveReady && this.googleDriveFolderId) {
+                    try {
+                        console.log(`Uploading ${attachment.name} to Google Drive...`);
+                        const driveFile = await this.uploadFileToGoogleDrive(attachment, attachment.name);
+                        return driveFile;
+                    } catch (error) {
+                        console.log(`Google Drive upload failed for ${attachment.name}, falling back to compression`);
+                    }
+                }
+
+                // Fallback to compression method if Google Drive not available
                 // Skip if attachment is already small enough
                 if (attachment.size < 500000) { // 500KB
                     return attachment;
@@ -694,6 +714,141 @@ class NoticeBoard {
             
             img.src = attachment.data;
         });
+    }
+
+    async initializeGoogleDrive() {
+        const config = window.CLOUD_CONFIG?.googledrive;
+        if (!config || !config.enabled || !config.apiKey) {
+            console.log('Google Drive not configured - attachments will use compression method');
+            return;
+        }
+
+        try {
+            console.log('Initializing Google Drive API...');
+            await new Promise((resolve) => {
+                gapi.load('client:auth2', resolve);
+            });
+
+            await gapi.client.init({
+                apiKey: config.apiKey,
+                clientId: config.clientId,
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+                scope: 'https://www.googleapis.com/auth/drive.file'
+            });
+
+            this.googleDriveReady = true;
+            await this.createOrFindDriveFolder();
+            console.log('Google Drive initialized successfully');
+            this.showToast('Google Drive storage ready', 'success');
+        } catch (error) {
+            console.error('Failed to initialize Google Drive:', error);
+            this.showToast('Google Drive initialization failed', 'warning');
+        }
+    }
+
+    async createOrFindDriveFolder() {
+        const config = window.CLOUD_CONFIG.googledrive;
+        try {
+            // Search for existing folder
+            const response = await gapi.client.drive.files.list({
+                q: `name='${config.folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                fields: 'files(id, name)'
+            });
+
+            if (response.result.files.length > 0) {
+                this.googleDriveFolderId = response.result.files[0].id;
+                console.log('Found existing Google Drive folder:', this.googleDriveFolderId);
+            } else {
+                // Create new folder
+                const createResponse = await gapi.client.drive.files.create({
+                    resource: {
+                        name: config.folderName,
+                        mimeType: 'application/vnd.google-apps.folder'
+                    },
+                    fields: 'id'
+                });
+                this.googleDriveFolderId = createResponse.result.id;
+                console.log('Created new Google Drive folder:', this.googleDriveFolderId);
+            }
+        } catch (error) {
+            console.error('Error with Google Drive folder:', error);
+            throw error;
+        }
+    }
+
+    async uploadFileToGoogleDrive(file, fileName) {
+        if (!this.googleDriveReady || !this.googleDriveFolderId) {
+            throw new Error('Google Drive not ready');
+        }
+
+        try {
+            console.log(`Uploading ${fileName} to Google Drive...`);
+            
+            const metadata = {
+                name: fileName,
+                parents: [this.googleDriveFolderId]
+            };
+
+            // Convert base64 to blob
+            const base64Data = file.data.split(',')[1];
+            const byteCharacters = atob(base64Data);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: file.type });
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', blob);
+
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,webContentLink', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token}`
+                },
+                body: form
+            });
+
+            if (!response.ok) {
+                throw new Error(`Upload failed: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log(`File uploaded successfully: ${fileName} (ID: ${result.id})`);
+            
+            return {
+                id: result.id,
+                name: fileName,
+                type: file.type,
+                size: file.size,
+                webViewLink: result.webViewLink,
+                webContentLink: result.webContentLink,
+                driveFile: true
+            };
+        } catch (error) {
+            console.error('Google Drive upload error:', error);
+            throw error;
+        }
+    }
+
+    async downloadFileFromGoogleDrive(fileId) {
+        if (!this.googleDriveReady) {
+            throw new Error('Google Drive not ready');
+        }
+
+        try {
+            const response = await gapi.client.drive.files.get({
+                fileId: fileId,
+                alt: 'media'
+            });
+
+            return response.body;
+        } catch (error) {
+            console.error('Google Drive download error:', error);
+            throw error;
+        }
     }
 
     updateSyncStatus(status, message) {
@@ -1660,6 +1815,22 @@ class NoticeBoard {
                             <span class="attachment-name">${attachment.name}</span>
                             <span class="attachment-size">${size}</span>
                             <small class="attachment-note">${attachment.note}</small>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Handle Google Drive files
+            if (attachment.driveFile) {
+                return `
+                    <div class="notice-attachment drive-attachment">
+                        <i class="attachment-icon ${icon}"></i>
+                        <div class="attachment-info">
+                            <a href="${attachment.webViewLink}" target="_blank" class="attachment-link">
+                                <span class="attachment-name">${attachment.name}</span>
+                                <span class="attachment-size">${size}</span>
+                                <small class="drive-info">📁 Stored in Google Drive</small>
+                            </a>
                         </div>
                     </div>
                 `;
