@@ -1201,34 +1201,44 @@ class NoticeBoard {
         const attachmentsHTML = this.createAttachmentsDisplay(notice.attachments);
 
         return `
-            <div class="notice-card ${priorityClass}" data-notice-id="${notice.id}">
-                ${deadlineIndicator}
-                <div class="notice-header">
-                    <h3 class="notice-title">${notice.title}</h3>
-                </div>
-                <div class="notice-meta">
-                    <span class="category-badge ${categoryClass}">
-                        ${this.getCategoryIcon(notice.category)} ${notice.category}
-                    </span>
-                    <span class="priority-badge ${priorityClass}">
-                        <i class="fas fa-flag"></i> ${notice.priority}
-                    </span>
-                    <span class="meta-item">
-                        <i class="fas fa-calendar"></i> ${this.formatDate(notice.date)}
-                    </span>
-                    ${notice.author ? `
-                        <span class="meta-item">
-                            <i class="fas fa-user"></i> ${notice.author}
+            <div class="notice-card" data-notice-id="${notice.id}">
+                <div class="notice-card-header ${priorityClass}">
+                    <div class="header-top">
+                        <h3 class="notice-title">${notice.title}</h3>
+                        ${adminActions}
+                    </div>
+                    <div class="header-meta">
+                        <span class="category-info">
+                            ${this.getCategoryIcon(notice.category)} ${notice.category}
                         </span>
+                        <span class="priority-info">
+                            <i class="fas fa-flag"></i> ${notice.priority.toUpperCase()}
+                        </span>
+                        ${deadlineInfo ? `
+                            <span class="deadline-info ${deadlineInfo.class}">
+                                <i class="fas fa-clock"></i> ${deadlineInfo.text}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="notice-card-body">
+                    <div class="notice-meta">
+                        <span class="meta-item">
+                            <i class="fas fa-calendar"></i> ${this.formatDate(notice.date)}
+                        </span>
+                        ${notice.author ? `
+                            <span class="meta-item">
+                                <i class="fas fa-user"></i> ${notice.author}
+                            </span>
+                        ` : ''}
+                    </div>
+                    <div class="notice-content">
+                        ${processedContent}
+                    </div>
+                    ${attachmentsHTML}
+                    ${tagsHTML ? `
+                        <div class="notice-tags">${tagsHTML}</div>
                     ` : ''}
-                </div>
-                <div class="notice-content">
-                    ${processedContent}
-                </div>
-                ${attachmentsHTML}
-                <div class="notice-footer">
-                    <div class="notice-tags">${tagsHTML}</div>
-                    ${adminActions}
                 </div>
             </div>
         `;
