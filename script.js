@@ -1033,10 +1033,49 @@ class NoticeBoard {
             <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">Developed by Thejaraj R, SMP</span>
         `;
         
-        // Hide developer info after 5 seconds
+        // Show updates info after developer info
         setTimeout(() => {
-            this.syncStatus.style.display = 'none';
+            this.showUpdatesInfo();
         }, 5000);
+    }
+    
+    showUpdatesInfo() {
+        this.syncStatus.className = 'sync-status updates-info';
+        const lastUpdateText = this.lastUpdateTime 
+            ? `Last updated: ${this.formatLastUpdateTime(this.lastUpdateTime)}`
+            : 'No recent updates';
+        
+        this.syncStatus.innerHTML = `
+            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">
+                Visit daily for updates • ${lastUpdateText}
+            </span>
+        `;
+        
+        // Make this message static - don't hide it
+        // Remove the setTimeout that was hiding the message
+    }
+    
+    formatLastUpdateTime(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / (1000 * 60));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        
+        if (diffMins < 60) {
+            return diffMins <= 1 ? 'Just now' : `${diffMins} min ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours}h ago`;
+        } else if (diffDays < 7) {
+            return `${diffDays}d ago`;
+        } else {
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+        }
     }
 
     getSyncIcon(status) {
