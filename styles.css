@@ -1030,7 +1030,7 @@ body {
   color: #374151;
   line-height: 1.6;
   margin-bottom: var(--spacing-md);
-  padding-left: var(--spacing-md);
+  padding-left: var(--spacing-sm);
   padding-right: var(--spacing-md);
 }
 
@@ -1046,7 +1046,7 @@ body {
 .notice-content ul,
 .notice-content ol {
   margin: var(--spacing-sm) 0;
-  padding-left: var(--spacing-xl);
+  padding-left: var(--spacing-lg);
 }
 
 .notice-content ul li {
