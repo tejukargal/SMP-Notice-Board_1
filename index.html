@@ -52,46 +52,74 @@
             
             <!-- Category Filter Section -->
             <div class="category-filter-section">
-                <div class="filter-buttons">
+                <div class="filter-buttons" id="filterButtons">
                     <button class="filter-btn active" data-category="all">
                         <i class="fas fa-th-large"></i>
                         <span>All</span>
                     </button>
-                    <button class="filter-btn" data-category="academic">
+                    <button class="filter-btn" data-category="academic" style="display: none;">
                         <i class="fas fa-graduation-cap"></i>
                         <span>Academic</span>
                     </button>
-                    <button class="filter-btn" data-category="events">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Events</span>
-                    </button>
-                    <button class="filter-btn" data-category="exams">
-                        <i class="fas fa-file-alt"></i>
-                        <span>Exams</span>
-                    </button>
-                    <button class="filter-btn" data-category="urgent">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <span>Urgent</span>
-                    </button>
-                    <button class="filter-btn" data-category="scholarship">
-                        <i class="fas fa-award"></i>
-                        <span>Scholarship</span>
-                    </button>
-                    <button class="filter-btn" data-category="fee-payments">
-                        <i class="fas fa-credit-card"></i>
-                        <span>Fee Payments</span>
-                    </button>
-                    <button class="filter-btn" data-category="admission">
+                    <button class="filter-btn" data-category="admission" style="display: none;">
                         <i class="fas fa-door-open"></i>
                         <span>Admission</span>
                     </button>
-                    <button class="filter-btn" data-category="placement">
+                    <button class="filter-btn" data-category="civil" style="display: none;">
+                        <i class="fas fa-hard-hat"></i>
+                        <span>Civil</span>
+                    </button>
+                    <button class="filter-btn" data-category="cs" style="display: none;">
+                        <i class="fas fa-laptop-code"></i>
+                        <span>CS</span>
+                    </button>
+                    <button class="filter-btn" data-category="ec" style="display: none;">
+                        <i class="fas fa-microchip"></i>
+                        <span>EC</span>
+                    </button>
+                    <button class="filter-btn" data-category="ee" style="display: none;">
+                        <i class="fas fa-bolt"></i>
+                        <span>EE</span>
+                    </button>
+                    <button class="filter-btn" data-category="events" style="display: none;">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Events</span>
+                    </button>
+                    <button class="filter-btn" data-category="exams" style="display: none;">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Exams</span>
+                    </button>
+                    <button class="filter-btn" data-category="fee-payments" style="display: none;">
+                        <i class="fas fa-credit-card"></i>
+                        <span>Fee Payments</span>
+                    </button>
+                    <button class="filter-btn" data-category="library" style="display: none;">
+                        <i class="fas fa-book"></i>
+                        <span>Library</span>
+                    </button>
+                    <button class="filter-btn" data-category="mech" style="display: none;">
+                        <i class="fas fa-cogs"></i>
+                        <span>Mech</span>
+                    </button>
+                    <button class="filter-btn" data-category="office" style="display: none;">
+                        <i class="fas fa-building"></i>
+                        <span>Office</span>
+                    </button>
+                    <button class="filter-btn" data-category="placement" style="display: none;">
                         <i class="fas fa-briefcase"></i>
                         <span>Placement</span>
                     </button>
-                    <button class="filter-btn" data-category="library">
-                        <i class="fas fa-book"></i>
-                        <span>Library</span>
+                    <button class="filter-btn" data-category="results" style="display: none;">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Results</span>
+                    </button>
+                    <button class="filter-btn" data-category="scholarship" style="display: none;">
+                        <i class="fas fa-award"></i>
+                        <span>Scholarship</span>
+                    </button>
+                    <button class="filter-btn" data-category="urgent" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span>Urgent</span>
                     </button>
                 </div>
             </div>
@@ -153,14 +181,21 @@
                         <select id="noticeCategory" required>
                             <option value="">Select Category</option>
                             <option value="academic">Academic</option>
+                            <option value="admission">Admission</option>
+                            <option value="civil">Civil</option>
+                            <option value="cs">CS</option>
+                            <option value="ec">EC</option>
+                            <option value="ee">EE</option>
                             <option value="events">Events</option>
                             <option value="exams">Exams</option>
-                            <option value="urgent">Urgent</option>
-                            <option value="scholarship">Scholarship</option>
                             <option value="fee-payments">Fee Payments</option>
-                            <option value="admission">Admission</option>
-                            <option value="placement">Placement</option>
                             <option value="library">Library</option>
+                            <option value="mech">Mech</option>
+                            <option value="office">Office</option>
+                            <option value="placement">Placement</option>
+                            <option value="results">Results</option>
+                            <option value="scholarship">Scholarship</option>
+                            <option value="urgent">Urgent</option>
                         </select>
                     </div>
                     <div class="form-group">

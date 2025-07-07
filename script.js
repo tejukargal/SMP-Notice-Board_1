@@ -1133,6 +1133,31 @@ class NoticeBoard {
         this.render();
     }
 
+    updateCategoryTabs() {
+        // Get all available categories from current notices
+        const availableCategories = [...new Set(this.notices.map(notice => notice.category))];
+        
+        // Get all filter buttons
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        
+        filterButtons.forEach(btn => {
+            const category = btn.dataset.category;
+            
+            // Always show 'All' button
+            if (category === 'all') {
+                btn.style.display = 'block';
+                return;
+            }
+            
+            // Show/hide other category buttons based on availability
+            if (availableCategories.includes(category)) {
+                btn.style.display = 'block';
+            } else {
+                btn.style.display = 'none';
+            }
+        });
+    }
+
     applyFiltersAndSort() {
         let filtered = [...this.notices];
 
@@ -1187,21 +1212,18 @@ class NoticeBoard {
             this.renderNotices();
         }
         this.renderActiveTags();
+        this.updateCategoryTabs();
     }
 
     renderNotices() {
-        const noticesHTML = this.filteredNotices.map(notice => this.createNoticeCard(notice)).join('');
+        const noticesHTML = this.filteredNotices.map((notice, index) => this.createNoticeCard(notice, index + 1)).join('');
         this.noticesContainer.innerHTML = noticesHTML;
         
         // Add event listeners to notice cards
         this.filteredNotices.forEach(notice => {
             const card = document.querySelector(`[data-notice-id="${notice.id}"]`);
             if (card) {
-                card.addEventListener('click', (e) => {
-                    if (!e.target.closest('.notice-actions')) {
-                        this.showNoticeDetails(notice);
-                    }
-                });
+                // Removed card click popup functionality
 
                 // Add tag click listeners
                 const tags = card.querySelectorAll('.notice-tag');
@@ -1235,7 +1257,7 @@ class NoticeBoard {
         });
     }
 
-    createNoticeCard(notice) {
+    createNoticeCard(notice, serialNumber) {
         const deadlineInfo = this.getDeadlineInfo(notice.deadline);
         const categoryClass = `category-${notice.category.replace(/\s+/g, '-')}`;
         const priorityClass = `priority-${notice.priority}`;
@@ -1266,13 +1288,19 @@ class NoticeBoard {
         
         // Create attachments display
         const attachmentsHTML = this.createAttachmentsDisplay(notice.attachments);
+        
+        // Format serial number with leading zero
+        const formattedSerialNumber = serialNumber.toString().padStart(2, '0');
 
         return `
             <div class="notice-card priority-${notice.priority}-card" data-notice-id="${notice.id}">
                 <div class="notice-card-header ${priorityClass}">
                     <div class="header-top">
                         <h3 class="notice-title">${notice.title}</h3>
-                        ${adminActions}
+                        <div class="header-right">
+                            <div class="notice-serial-number">${formattedSerialNumber}</div>
+                            ${adminActions}
+                        </div>
                     </div>
                     <div class="header-meta">
                         <span class="category-info">
@@ -1314,14 +1342,21 @@ class NoticeBoard {
     getCategoryIcon(category) {
         const icons = {
             academic: 'fas fa-graduation-cap',
+            admission: 'fas fa-door-open',
+            civil: 'fas fa-hard-hat',
+            cs: 'fas fa-laptop-code',
+            ec: 'fas fa-microchip',
+            ee: 'fas fa-bolt',
             events: 'fas fa-calendar-alt',
             exams: 'fas fa-file-alt',
-            urgent: 'fas fa-exclamation-triangle',
-            scholarship: 'fas fa-award',
             'fee-payments': 'fas fa-credit-card',
-            admission: 'fas fa-door-open',
+            library: 'fas fa-book',
+            mech: 'fas fa-cogs',
+            office: 'fas fa-building',
             placement: 'fas fa-briefcase',
-            library: 'fas fa-book'
+            results: 'fas fa-chart-line',
+            scholarship: 'fas fa-award',
+            urgent: 'fas fa-exclamation-triangle'
         };
         return `<i class="${icons[category] || 'fas fa-info-circle'}"></i>`;
     }
