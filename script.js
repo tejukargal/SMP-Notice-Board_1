@@ -4,7 +4,7 @@ class NoticeBoard {
         this.filteredNotices = [];
         this.currentFilter = 'all';
         this.activeTags = new Set();
-        this.sortBy = 'date-desc';
+        this.sortBy = 'order';
         this.viewMode = 'grid';
         this.isAdmin = false;
         this.quillEditor = null;
@@ -1194,7 +1194,7 @@ class NoticeBoard {
                 case 'order':
                     return (a.order || 99) - (b.order || 99);
                 default:
-                    // Default sort by order then date
+                    // Primary sort by order, then by date
                     const orderComparison = (a.order || 99) - (b.order || 99);
                     return orderComparison !== 0 ? orderComparison : new Date(b.date) - new Date(a.date);
             }
@@ -1262,6 +1262,9 @@ class NoticeBoard {
         const categoryClass = `category-${notice.category.replace(/\s+/g, '-')}`;
         const priorityClass = `priority-${notice.priority}`;
         
+        // Add order class for top 3 positions to enable animations
+        const orderClass = (notice.order >= 1 && notice.order <= 3) ? `order-${notice.order}` : '';
+        
         const tagsHTML = notice.tags ? notice.tags.map(tag => 
             `<span class="notice-tag">${tag}</span>`
         ).join('') : '';
@@ -1294,7 +1297,7 @@ class NoticeBoard {
 
         return `
             <div class="notice-card priority-${notice.priority}-card" data-notice-id="${notice.id}">
-                <div class="notice-card-header ${priorityClass}">
+                <div class="notice-card-header ${priorityClass} ${orderClass}">
                     <div class="header-top">
                         <h3 class="notice-title">${notice.title}</h3>
                         <div class="header-right">
@@ -1442,25 +1445,62 @@ class NoticeBoard {
         const orderSelect = document.getElementById('noticeOrder');
         if (!orderSelect) return;
 
-        const usedOrders = this.notices.map(notice => notice.order || 99);
-        const maxOrder = Math.max(...usedOrders, 0);
-        
+        // Only show 3 manual orders + Next option
         let options = '';
-        for (let i = 1; i <= Math.max(maxOrder + 1, 10); i++) {
-            const label = this.getOrderLabel(i);
-            options += `<option value="${i}">${i} - ${label}</option>`;
-        }
+        options += `<option value="1">1st Position</option>`;
+        options += `<option value="2">2nd Position</option>`;
+        options += `<option value="3">3rd Position</option>`;
+        options += `<option value="auto">Next Available Position</option>`;
         
         orderSelect.innerHTML = options;
-        orderSelect.value = maxOrder + 1;
+        orderSelect.value = 'auto'; // Default to next available
     }
 
-    getOrderLabel(order) {
-        const labels = {
-            1: 'First', 2: 'Second', 3: 'Third', 4: 'Fourth', 5: 'Fifth',
-            6: 'Sixth', 7: 'Seventh', 8: 'Eighth', 9: 'Ninth', 10: 'Tenth'
-        };
-        return labels[order] || `${order}th`;
+    getNextAvailableOrder() {
+        if (this.notices.length === 0) return 1;
+        
+        const usedOrders = this.notices.map(notice => notice.order || 99).sort((a, b) => a - b);
+        const maxOrder = Math.max(...usedOrders);
+        
+        // Ensure we start from at least order 4 for auto-assigned notices
+        return Math.max(maxOrder + 1, 4);
+    }
+    
+    swapNoticeOrders(newOrder, currentNoticeId = null) {
+        // Find notice currently in the target order position
+        const existingNotice = this.notices.find(notice => 
+            notice.order === newOrder && notice.id !== currentNoticeId
+        );
+        
+        if (existingNotice) {
+            // Calculate next available order before swapping
+            const nextOrder = this.getNextAvailableOrder();
+            // Move the existing notice to the next available order
+            existingNotice.order = nextOrder;
+            console.log(`Swapped: Moved notice "${existingNotice.title}" from order ${newOrder} to order ${existingNotice.order}`);
+        }
+    }
+    
+    calculateNoticeOrder() {
+        const orderSelect = document.getElementById('noticeOrder');
+        const selectedValue = orderSelect.value;
+        
+        console.log(`Calculating order for selected value: ${selectedValue}`);
+        
+        if (selectedValue === 'auto') {
+            const autoOrder = this.getNextAvailableOrder();
+            console.log(`Auto order assigned: ${autoOrder}`);
+            return autoOrder;
+        } else {
+            const manualOrder = parseInt(selectedValue);
+            console.log(`Manual order selected: ${manualOrder}`);
+            
+            // Handle order swapping for manual orders (1, 2, 3)
+            if (manualOrder >= 1 && manualOrder <= 3) {
+                this.swapNoticeOrders(manualOrder, this.currentEditingNotice?.id);
+            }
+            return manualOrder;
+        }
     }
 
     hideNoticeModal() {
@@ -1489,7 +1529,13 @@ class NoticeBoard {
         // Set order
         const orderSelect = document.getElementById('noticeOrder');
         if (orderSelect) {
-            orderSelect.value = notice.order || 99;
+            const currentOrder = notice.order || this.getNextAvailableOrder();
+            // If it's one of the top 3 positions, show that, otherwise show auto
+            if (currentOrder >= 1 && currentOrder <= 3) {
+                orderSelect.value = currentOrder.toString();
+            } else {
+                orderSelect.value = 'auto';
+            }
         }
     }
 
@@ -1565,7 +1611,7 @@ class NoticeBoard {
             author: this.noticeAuthor.value.trim(),
             tags: this.currentTags.length > 0 ? this.currentTags : null,
             attachments: this.currentAttachments.length > 0 ? this.currentAttachments : null,
-            order: parseInt(document.getElementById('noticeOrder').value) || 99,
+            order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
         };
@@ -1744,7 +1790,7 @@ class NoticeBoard {
             this.updateAdminUI();
             this.render(); // Re-render notices to show admin controls
             this.hideAdminModal();
-            this.showToast('Admin login successful', 'success');
+            this.showToast('Admin login successful', 'success', 1000);
         } else {
             this.showToast('Invalid admin code', 'error');
             this.adminCode.value = '';
@@ -1757,7 +1803,7 @@ class NoticeBoard {
         sessionStorage.removeItem('isAdmin');
         this.updateAdminUI();
         this.render(); // Re-render notices to hide admin controls
-        this.showToast('Admin logout successful', 'info');
+        this.showToast('Admin logout successful', 'info', 1000);
     }
 
     showExportModal() {
@@ -1991,7 +2037,11 @@ class NoticeBoard {
         }
     }
 
-    showToast(message, type = 'info', duration = 10000) {
+    showToast(message, type = 'info', duration = null) {
+        // Set default durations based on type
+        if (duration === null) {
+            duration = type === 'success' ? 1000 : 3000; // 1 second for success, 3 seconds for others
+        }
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         
