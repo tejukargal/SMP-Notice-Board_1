@@ -1465,6 +1465,12 @@ body {
   .csv-data-container .csv-scroll-content {
     animation-play-state: running !important;
   }
+  
+  /* Enable smooth horizontal scrolling on touch devices */
+  .csv-table-wrapper {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
 }
 
 /* Enhanced scrolling animations */
@@ -1554,6 +1560,72 @@ body {
   color: #ffa8a8;
 }
 
+/* Horizontal Scroll Indicators for Mobile */
+.csv-scroll-indicators {
+  display: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 15;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.csv-scroll-indicator-left {
+  left: 10px;
+}
+
+.csv-scroll-indicator-right {
+  right: 10px;
+}
+
+.csv-scroll-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary-color);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 15px;
+  font-size: 11px;
+  font-weight: 500;
+  z-index: 15;
+  pointer-events: none;
+  animation: fadeInOut 3s ease-in-out;
+  display: none;
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 1; }
+}
+
+/* Show scroll indicators on mobile */
+@media (max-width: 768px) {
+  .csv-data-container {
+    position: relative;
+  }
+  
+  .csv-table-wrapper.has-overflow .csv-scroll-hint {
+    display: block;
+  }
+  
+  .csv-table-wrapper.scrollable-left .csv-scroll-indicator-left {
+    display: block;
+  }
+  
+  .csv-table-wrapper.scrollable-right .csv-scroll-indicator-right {
+    display: block;
+  }
+}
+
 /* CSV Control Buttons */
 .csv-controls {
   display: flex;
@@ -1624,6 +1696,27 @@ body {
     height: 160px;
     overflow-x: auto;
     overflow-y: hidden;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) var(--surface-color);
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar {
+    height: 8px;
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar-track {
+    background: var(--surface-color);
+    border-radius: 4px;
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 4px;
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
   }
   
   .csv-table {
@@ -1702,6 +1795,23 @@ body {
     height: 140px;
     overflow-x: auto;
     overflow-y: hidden;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color) var(--surface-color);
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar {
+    height: 6px;
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar-track {
+    background: var(--surface-color);
+    border-radius: 3px;
+  }
+  
+  .csv-table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 3px;
   }
   
   .csv-table {

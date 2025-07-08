@@ -2291,7 +2291,12 @@ class NoticeBoard {
                         ${this.escapeHtml(label)}
                         <span class="csv-row-count">(${totalRows} records)</span>
                     </div>
-                    <div class="csv-table-wrapper">
+                    <div class="csv-table-wrapper" id="${instanceId}-wrapper">
+                        <div class="csv-scroll-indicators">
+                            <div class="csv-scroll-indicator-left csv-scroll-indicators">← Scroll</div>
+                            <div class="csv-scroll-indicator-right csv-scroll-indicators">Scroll →</div>
+                            <div class="csv-scroll-hint">← Swipe to see more columns →</div>
+                        </div>
                         <table class="csv-table">
                             <thead class="csv-thead">
                                 <tr>${headerHTML}</tr>
@@ -2539,6 +2544,9 @@ class NoticeBoard {
                 // Initialize hover/touch behavior
                 this.initializeScrollInteractions(container);
                 
+                // Initialize horizontal scroll indicators
+                this.initializeHorizontalScrollIndicators(container);
+                
                 // Force reflow to ensure animation starts
                 scrollContent.offsetHeight;
             }
@@ -2554,6 +2562,8 @@ class NoticeBoard {
         let isManualScrolling = false;
         let startY = 0;
         let scrollTop = 0;
+        let touchCount = 0;
+        let lastTouchTime = 0;
         
         // Mouse events
         container.addEventListener('mouseenter', () => {
@@ -2577,8 +2587,31 @@ class NoticeBoard {
             }
         });
         
-        // Touch events for mobile
+        // Enhanced touch events for mobile
         container.addEventListener('touchstart', (e) => {
+            const currentTime = Date.now();
+            
+            // Check for double tap within 500ms
+            if (currentTime - lastTouchTime < 500) {
+                touchCount++;
+            } else {
+                touchCount = 1;
+            }
+            lastTouchTime = currentTime;
+            
+            // On second touch, resume scrolling
+            if (touchCount === 2) {
+                scrollContent.style.animationPlayState = 'running';
+                this.showToast('Scrolling resumed', 'info');
+                touchCount = 0;
+                return;
+            }
+            
+            // Pause on first touch
+            if (scrollContent.style.animationPlayState !== 'paused') {
+                scrollContent.style.animationPlayState = 'paused';
+            }
+            
             if (scrollContent.classList.contains('manual-scroll')) {
                 startY = e.touches[0].clientY;
                 scrollTop = scrollContent.scrollTop || 0;
@@ -2607,8 +2640,63 @@ class NoticeBoard {
                         scrollContent.style.animationPlayState = 'running';
                     }
                 }, 1000);
+            } else {
+                // Auto-resume after 4 seconds if not double-tapped
+                setTimeout(() => {
+                    if (touchCount < 2 && scrollContent.style.animationPlayState === 'paused') {
+                        scrollContent.style.animationPlayState = 'running';
+                    }
+                }, 4000);
             }
         });
+    }
+    
+    // Initialize horizontal scroll indicators for mobile
+    initializeHorizontalScrollIndicators(container) {
+        const tableWrapper = container.querySelector('.csv-table-wrapper');
+        const table = container.querySelector('.csv-table');
+        
+        if (!tableWrapper || !table) return;
+        
+        const updateScrollIndicators = () => {
+            const wrapperWidth = tableWrapper.clientWidth;
+            const tableWidth = table.scrollWidth;
+            const scrollLeft = tableWrapper.scrollLeft;
+            const maxScrollLeft = tableWidth - wrapperWidth;
+            
+            // Check if table overflows horizontally
+            if (tableWidth > wrapperWidth) {
+                tableWrapper.classList.add('has-overflow');
+                
+                // Show left indicator if can scroll left
+                if (scrollLeft > 10) {
+                    tableWrapper.classList.add('scrollable-left');
+                } else {
+                    tableWrapper.classList.remove('scrollable-left');
+                }
+                
+                // Show right indicator if can scroll right
+                if (scrollLeft < maxScrollLeft - 10) {
+                    tableWrapper.classList.add('scrollable-right');
+                } else {
+                    tableWrapper.classList.remove('scrollable-right');
+                }
+            } else {
+                tableWrapper.classList.remove('has-overflow', 'scrollable-left', 'scrollable-right');
+            }
+        };
+        
+        // Update indicators on scroll
+        tableWrapper.addEventListener('scroll', updateScrollIndicators);
+        
+        // Update indicators on resize
+        window.addEventListener('resize', updateScrollIndicators);
+        
+        // Initial update
+        setTimeout(updateScrollIndicators, 100);
+        
+        // Store reference for cleanup
+        container._updateScrollIndicators = updateScrollIndicators;
     }
 
     handleKeyboardShortcuts(e) {
