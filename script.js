@@ -2265,6 +2265,18 @@ class NoticeBoard {
                 return `<tr class="csv-row" data-row="${index}">${cellsHTML}</tr>`;
             };
 
+            // Create mobile pipe-separated format
+            const createMobileRowHTML = (row, index) => {
+                const rowValues = sanitizedData.headers.map((header) => {
+                    const cellValue = this.formatCellValue(row[header] || '', header);
+                    const sanitizedValue = this.escapeHtml(cellValue);
+                    // Check if value looks like an amount (contains numbers)
+                    const isAmount = /\d/.test(sanitizedValue);
+                    return isAmount ? `<span class="csv-amount">${sanitizedValue}</span>` : sanitizedValue;
+                }).join('<span class="csv-pipe-separator">|</span>');
+                return `<div class="csv-mobile-row" data-row="${index}">${rowValues}</div>`;
+            };
+
             // Create original rows with enhanced indexing
             const originalRowsHTML = sanitizedData.rows.map((row, index) => createRowHTML(row, index)).join('');
             
@@ -2275,6 +2287,13 @@ class NoticeBoard {
             
             // Combine all rows
             const allRowsHTML = originalRowsHTML + duplicatedRowsHTML;
+
+            // Create mobile format rows
+            const originalMobileRowsHTML = sanitizedData.rows.map((row, index) => createMobileRowHTML(row, index)).join('');
+            const duplicatedMobileRowsHTML = sanitizedData.rows.map((row, index) => 
+                createMobileRowHTML(row, index + sanitizedData.rows.length)
+            ).join('');
+            const allMobileRowsHTML = originalMobileRowsHTML + duplicatedMobileRowsHTML;
 
             // Enhanced timing calculation with adaptive speed
             const totalRows = sanitizedData.rows.length;
@@ -2312,6 +2331,16 @@ class NoticeBoard {
                                 </div>
                             </tbody>
                         </table>
+                        <div class="csv-mobile-format">
+                            <div class="csv-scroll-container">
+                                <div class="csv-scroll-content"
+                                     style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
+                                     data-animation-duration="${animationDuration}"
+                                     data-total-rows="${totalRows}">
+                                    ${allMobileRowsHTML}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="csv-controls">
                         <button class="csv-control-btn" onclick="noticeBoard.toggleScrollAnimation('${instanceId}')" title="Pause/Resume scrolling">

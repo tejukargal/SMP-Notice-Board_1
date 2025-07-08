@@ -1365,6 +1365,11 @@ body {
   animation-play-state: running;
 }
 
+/* Hide mobile format on desktop */
+.csv-mobile-format {
+  display: none;
+}
+
 .csv-row {
   display: table;
   width: 100%;
@@ -1690,19 +1695,20 @@ body {
   background: linear-gradient(135deg, #6b7280, #4b5563);
 }
 
-/* Mobile Responsive Optimizations */
+/* Mobile Responsive Optimizations - Pipe-separated format */
 @media (max-width: 768px) {
   .csv-table-wrapper {
     height: 160px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     scrollbar-width: thin;
     scrollbar-color: var(--primary-color) var(--surface-color);
+    padding: var(--spacing-sm);
   }
   
   .csv-table-wrapper::-webkit-scrollbar {
-    height: 8px;
+    width: 8px;
   }
   
   .csv-table-wrapper::-webkit-scrollbar-track {
@@ -1719,60 +1725,63 @@ body {
     background: var(--primary-dark);
   }
   
+  /* Hide table structure on mobile */
   .csv-table {
-    min-width: 120%;
-    width: max-content;
-    table-layout: fixed;
-  }
-  
-  .csv-tbody {
-    height: 120px;
-  }
-  
-  .csv-header,
-  .csv-cell {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-size-xs);
-    white-space: nowrap;
-    overflow: visible;
-    text-overflow: clip;
-  }
-  
-  .csv-row {
-    height: 28px;
-  }
-  
-  /* Mobile: Show maximum 3 columns with optimized widths for full visibility */
-  .csv-cell:nth-child(1),
-  .csv-header:nth-child(1) {
-    width: 15%;
-    min-width: 60px;
-  }
-  
-  .csv-cell:nth-child(2),
-  .csv-header:nth-child(2) {
-    width: 50%;
-    min-width: 140px;
-  }
-  
-  .csv-cell:nth-child(3),
-  .csv-header:nth-child(3) {
-    width: 35%;
-    min-width: 100px;
-  }
-  
-  /* Hide columns beyond 3rd on mobile for better visibility */
-  .csv-cell:nth-child(n+4),
-  .csv-header:nth-child(n+4) {
     display: none;
   }
   
-  /* Special styling for amount column (3rd column) on mobile */
-  .csv-cell:nth-child(3) {
-    text-align: right;
-    font-weight: 600;
+  /* Create pipe-separated mobile format */
+  .csv-mobile-format {
+    display: block;
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  .csv-mobile-format .csv-scroll-content {
+    animation: scroll-csv-smooth var(--scroll-duration, 25s) linear infinite;
+    position: relative;
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    animation-fill-mode: both;
+    animation-play-state: running;
+  }
+  
+  .csv-mobile-row {
+    display: block;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .csv-mobile-row:nth-child(even) {
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  
+  .csv-mobile-row:hover {
+    background: rgba(102, 126, 234, 0.05);
+    border-radius: 4px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+  
+  /* Style pipe separators */
+  .csv-pipe-separator {
     color: var(--primary-color);
-    padding-right: var(--spacing-md);
+    font-weight: bold;
+    margin: 0 4px;
+  }
+  
+  /* Style numeric values (amounts) */
+  .csv-amount {
+    color: var(--primary-color);
+    font-weight: 600;
   }
   
   .csv-controls {
@@ -1787,9 +1796,9 @@ body {
     font-size: var(--font-size-xs);
   }
   
-  /* Show column indicator for mobile */
+  /* Show mobile format indicator */
   .csv-data-container::after {
-    content: "Showing 3 columns on mobile";
+    content: "Mobile format: All columns displayed";
     position: absolute;
     bottom: 8px;
     right: 12px;
