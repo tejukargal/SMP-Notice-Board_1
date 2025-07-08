@@ -1720,8 +1720,9 @@ body {
   }
   
   .csv-table {
-    min-width: 100%;
+    min-width: 110%;
     width: max-content;
+    table-layout: fixed;
   }
   
   .csv-tbody {
@@ -1733,48 +1734,43 @@ body {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
     white-space: nowrap;
-    min-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
   .csv-row {
     height: 28px;
   }
   
-  /* Dynamic column widths for mobile */
+  /* Mobile: Show maximum 4 columns with optimized widths */
   .csv-cell:nth-child(1),
   .csv-header:nth-child(1) {
-    min-width: 60px;
-    width: auto;
+    width: 12%;
+    min-width: 50px;
   }
   
   .csv-cell:nth-child(2),
   .csv-header:nth-child(2) {
-    min-width: 150px;
-    width: auto;
+    width: 40%;
+    min-width: 120px;
   }
   
   .csv-cell:nth-child(3),
   .csv-header:nth-child(3) {
-    min-width: 100px;
-    width: auto;
+    width: 25%;
+    min-width: 80px;
   }
   
   .csv-cell:nth-child(4),
   .csv-header:nth-child(4) {
-    min-width: 120px;
-    width: auto;
+    width: 23%;
+    min-width: 75px;
   }
   
-  .csv-cell:nth-child(5),
-  .csv-header:nth-child(5) {
-    min-width: 100px;
-    width: auto;
-  }
-  
-  .csv-cell:nth-child(n+6),
-  .csv-header:nth-child(n+6) {
-    min-width: 100px;
-    width: auto;
+  /* Hide columns beyond 4th on mobile */
+  .csv-cell:nth-child(n+5),
+  .csv-header:nth-child(n+5) {
+    display: none;
   }
   
   .csv-controls {
@@ -1787,6 +1783,20 @@ body {
     height: 28px;
     padding: var(--spacing-xs);
     font-size: var(--font-size-xs);
+  }
+  
+  /* Show column indicator for mobile */
+  .csv-data-container::after {
+    content: "Showing 4 columns on mobile";
+    position: absolute;
+    bottom: 8px;
+    right: 12px;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
   }
 }
 
@@ -3014,4 +3024,84 @@ textarea:focus-visible {
 ::selection {
   background: rgba(102, 126, 234, 0.2);
   color: var(--text-primary);
+}
+
+/* Modern Checkbox Styling for Scrolling Messages */
+.form-group label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+#scrollingEnabled {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  margin-right: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--surface-color);
+  outline: none;
+  flex-shrink: 0;
+}
+
+#scrollingEnabled:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+#scrollingEnabled:checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+#scrollingEnabled:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+#scrollingEnabled:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+#scrollingEnabled + span {
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
+}
+
+#scrollingEnabled:checked + span {
+  color: var(--primary-color);
+}
+
+/* Dark mode support for checkbox */
+.dark-mode #scrollingEnabled {
+  background: var(--surface-color);
+  border-color: var(--border-color);
+}
+
+.dark-mode #scrollingEnabled:checked {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.dark-mode #scrollingEnabled:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
 }
