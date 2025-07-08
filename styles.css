@@ -1727,12 +1727,17 @@ body {
   
   /* Hide table structure on mobile */
   .csv-table {
-    display: none;
+    display: none !important;
+  }
+  
+  /* Hide scroll indicators on mobile */
+  .csv-scroll-indicators {
+    display: none !important;
   }
   
   /* Create pipe-separated mobile format */
   .csv-mobile-format {
-    display: block;
+    display: block !important;
     font-family: 'Courier New', monospace;
     line-height: 1.6;
     font-size: var(--font-size-sm);
