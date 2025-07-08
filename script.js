@@ -73,6 +73,7 @@ class NoticeBoard {
             lastModified: new Date().toISOString(),
             scrollingEnabled: true,
             scrollingLabel: 'Student Fee Dues List',
+            scrollingSpeed: 'medium',
             order: 1
         };
         
@@ -133,17 +134,8 @@ class NoticeBoard {
                 formattedLines.push(values.join(' | ').toUpperCase());
                 formattedLines.push('─'.repeat(values.join(' | ').length)); // Separator line
             } else {
-                // Data lines - format as needed
-                if (values.length >= 3) {
-                    // Assuming format: Sl No, Student Name, Fee Dues
-                    const slNo = values[0].padStart(3, ' ');
-                    const name = values[1].padEnd(25, ' ');
-                    const fee = values[2].includes('₹') ? values[2] : `₹${values[2]}`;
-                    formattedLines.push(`${slNo}. ${name} ${fee}`);
-                } else {
-                    // Fallback: just join with separators
-                    formattedLines.push(values.join(' | '));
-                }
+                // Data lines - use same pipe format as header
+                formattedLines.push(values.join(' | '));
             }
         }
         
@@ -151,28 +143,48 @@ class NoticeBoard {
     }
 
     // Create simple scrolling text HTML
-    createScrollingTextHTML(csvText, label) {
+    // Get scroll speed multiplier based on setting
+    getScrollSpeed(speedSetting = 'medium') {
+        const speeds = {
+            'slow': 3.0,     // Slow and readable
+            'medium': 2.0,   // Optimal for reading
+            'fast': 1.2,     // Faster pace
+            'speed': 0.8     // Very fast
+        };
+        return speeds[speedSetting] || speeds['medium'];
+    }
+
+    createScrollingTextHTML(csvText, label, speed = 'medium') {
         const lines = csvText.split('\n');
         const totalLines = lines.length;
         
-        // Create line elements
-        const lineElements = lines.map(line => `<div class="scroll-line">${line}</div>`).join('');
+        // Create line elements for pipe-separated format
+        const lineElements = lines.map(line => `<div class="csv-mobile-row">${line}</div>`).join('');
         
         // Duplicate content for seamless loop
         const duplicatedContent = lineElements + lineElements;
         
-        // Calculate animation duration based on content length (slower for more content)
-        const animationDuration = Math.max(totalLines * 2, 60); // Minimum 60 seconds
+        // Calculate animation duration based on content length and speed setting
+        const baseSpeed = this.getScrollSpeed(speed);
+        const animationDuration = Math.max(totalLines * baseSpeed, 15); // Minimum 15 seconds
         
-        // Create scrolling content with animation
+        // Generate unique ID for this scrolling instance
+        const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create new inline scrolling format - UPDATED: 2025-07-08-23:00
         return `
-            <div class="scrolling-message">
-                <h4 class="scrolling-label">
-                    <i class="fas fa-list"></i> ${label}
-                    <span class="record-count">(${totalLines - 2} records)</span>
-                </h4>
-                <div class="scrolling-content">
-                    <div class="scrolling-text" style="animation-duration: ${animationDuration}s;">
+            <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalLines}">
+                <div class="scrolling-label">
+                    <i class="fas fa-list"></i>
+                    ${this.escapeHtml(label)}
+                    <span class="scrolling-count">(${totalLines - 2} records)</span>
+                </div>
+                <hr class="scrolling-separator">
+                <div class="scrolling-content-area">
+                    <div class="scrolling-animation"
+                         style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalLines};"
+                         data-animation-duration="${animationDuration}"
+                         data-total-rows="${totalLines}">
                         ${duplicatedContent}
                     </div>
                 </div>
@@ -215,6 +227,7 @@ class NoticeBoard {
         this.noticeTags = document.getElementById('noticeTags');
         this.scrollingEnabled = document.getElementById('scrollingEnabled');
         this.scrollingLabel = document.getElementById('scrollingLabel');
+        this.scrollingSpeed = document.getElementById('scrollingSpeed');
         this.scrollingOptions = document.getElementById('scrollingOptions');
 
         // Admin elements
@@ -1459,7 +1472,7 @@ class NoticeBoard {
             
             if (this.csvData[csvFileNumber]) {
                 console.log(`CSV data found for file ${csvFileNumber}, creating scrolling text`);
-                scrollingHTML = this.createScrollingTextHTML(this.csvData[csvFileNumber], notice.scrollingLabel);
+                scrollingHTML = this.createScrollingTextHTML(this.csvData[csvFileNumber], notice.scrollingLabel, notice.scrollingSpeed);
             } else {
                 console.log(`No CSV data found for file ${csvFileNumber}`);
                 scrollingHTML = `
@@ -1708,6 +1721,7 @@ class NoticeBoard {
         // Populate scrolling options
         this.scrollingEnabled.checked = notice.scrollingEnabled || false;
         this.scrollingLabel.value = notice.scrollingLabel || '';
+        this.scrollingSpeed.value = notice.scrollingSpeed || 'medium';
         this.scrollingOptions.style.display = notice.scrollingEnabled ? 'block' : 'none';
         
         // Set order
@@ -1731,6 +1745,7 @@ class NoticeBoard {
         this.currentAttachments = [];
         this.scrollingEnabled.checked = false;
         this.scrollingLabel.value = '';
+        this.scrollingSpeed.value = 'medium';
         this.scrollingOptions.style.display = 'none';
         this.renderTagsDisplay();
         this.renderAttachmentsPreview();
@@ -1800,6 +1815,7 @@ class NoticeBoard {
             attachments: this.currentAttachments.length > 0 ? this.currentAttachments : null,
             scrollingEnabled: this.scrollingEnabled.checked,
             scrollingLabel: this.scrollingLabel.value.trim() || null,
+            scrollingSpeed: this.scrollingSpeed.value || 'medium',
             order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
@@ -2252,7 +2268,7 @@ class NoticeBoard {
             // Create enhanced table header with improved styling
             const headerHTML = sanitizedData.headers.map((header, index) => {
                 const sanitizedHeader = this.escapeHtml(header);
-                return `<th class="csv-header" data-column="${index}" title="${sanitizedHeader}">${sanitizedHeader}</th>`;
+                return `<th class="csv-header" data-column="${index}" title="${sanitizedHeader}" style="display: none !important;">${sanitizedHeader}</th>`;
             }).join('');
 
             // Create optimized row HTML with enhanced data formatting
@@ -2260,20 +2276,21 @@ class NoticeBoard {
                 const cellsHTML = sanitizedData.headers.map((header, colIndex) => {
                     const cellValue = this.formatCellValue(row[header] || '', header, colIndex);
                     const sanitizedValue = this.escapeHtml(cellValue);
-                    return `<td class="csv-cell" data-column="${colIndex}" title="${sanitizedValue}">${sanitizedValue}</td>`;
+                    return `<td class="csv-cell" data-column="${colIndex}" title="${sanitizedValue}" style="display: none !important;">${sanitizedValue}</td>`;
                 }).join('');
-                return `<tr class="csv-row" data-row="${index}">${cellsHTML}</tr>`;
+                return `<tr class="csv-row" data-row="${index}" style="display: none !important;">${cellsHTML}</tr>`;
             };
 
             // Create mobile pipe-separated format
             const createMobileRowHTML = (row, index) => {
-                const rowValues = sanitizedData.headers.map((header) => {
-                    const cellValue = this.formatCellValue(row[header] || '', header);
+                const rowValues = sanitizedData.headers.map((header, colIndex) => {
+                    const cellValue = this.formatCellValue(row[header] || '', header, colIndex);
                     const sanitizedValue = this.escapeHtml(cellValue);
-                    // Check if value looks like an amount (contains numbers)
-                    const isAmount = /\d/.test(sanitizedValue);
+                    // Check if value looks like an amount (contains rupees, numbers, or typical amount patterns)
+                    const isAmount = /(?:rs\.?|₹|\$|fee|amount|due|paid|balance)/i.test(header) || 
+                                   /(?:rs\.?\s*\d|₹\s*\d|\d+\.?\d*\s*(?:rs|₹))/i.test(sanitizedValue);
                     return isAmount ? `<span class="csv-amount">${sanitizedValue}</span>` : sanitizedValue;
-                }).join('<span class="csv-pipe-separator">|</span>');
+                }).join('<span class="csv-pipe-separator"> | </span>');
                 return `<div class="csv-mobile-row" data-row="${index}">${rowValues}</div>`;
             };
 
@@ -2304,60 +2321,20 @@ class NoticeBoard {
             const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
             return `
-                <div class="csv-data-container" id="${instanceId}" data-rows="${totalRows}">
-                    <div class="csv-label">
-                        <i class="fas fa-table"></i>
+                <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalRows}">
+                    <div class="scrolling-label">
+                        <i class="fas fa-list"></i>
                         ${this.escapeHtml(label)}
-                        <span class="csv-row-count">(${totalRows} records)</span>
+                        <span class="scrolling-count">(${totalRows} records)</span>
                     </div>
-                    <div class="csv-table-wrapper" id="${instanceId}-wrapper">
-                        <div class="csv-scroll-indicators">
-                            <div class="csv-scroll-indicator-left csv-scroll-indicators">← Scroll</div>
-                            <div class="csv-scroll-indicator-right csv-scroll-indicators">Scroll →</div>
-                            <div class="csv-scroll-hint">← Swipe to see more columns →</div>
+                    <hr class="scrolling-separator">
+                    <div class="scrolling-content-area">
+                        <div class="scrolling-animation"
+                             style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
+                             data-animation-duration="${animationDuration}"
+                             data-total-rows="${totalRows}">
+                            ${allMobileRowsHTML}
                         </div>
-                        <table class="csv-table">
-                            <thead class="csv-thead">
-                                <tr>${headerHTML}</tr>
-                            </thead>
-                            <tbody class="csv-tbody">
-                                <div class="csv-scroll-container">
-                                    <div class="csv-scroll-content" 
-                                         style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
-                                         data-animation-duration="${animationDuration}"
-                                         data-total-rows="${totalRows}">
-                                        ${allRowsHTML}
-                                    </div>
-                                </div>
-                            </tbody>
-                        </table>
-                        <div class="csv-mobile-format">
-                            <div class="csv-scroll-container">
-                                <div class="csv-scroll-content"
-                                     style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
-                                     data-animation-duration="${animationDuration}"
-                                     data-total-rows="${totalRows}">
-                                    ${allMobileRowsHTML}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="csv-controls">
-                        <button class="csv-control-btn" onclick="noticeBoard.toggleScrollAnimation('${instanceId}')" title="Pause/Resume scrolling">
-                            <i class="fas fa-pause"></i>
-                        </button>
-                        <button class="csv-control-btn" onclick="noticeBoard.adjustScrollSpeed('${instanceId}', 'slower')" title="Slower scrolling">
-                            <i class="fas fa-minus"></i>
-                        </button>
-                        <button class="csv-control-btn" onclick="noticeBoard.adjustScrollSpeed('${instanceId}', 'faster')" title="Faster scrolling">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                        <button class="csv-control-btn" onclick="noticeBoard.toggleManualScroll('${instanceId}')" title="Manual scroll mode">
-                            <i class="fas fa-hand-paper"></i>
-                        </button>
-                        <button class="csv-control-btn" onclick="noticeBoard.resetScrollPosition('${instanceId}')" title="Reset to top">
-                            <i class="fas fa-undo"></i>
-                        </button>
                     </div>
                 </div>
             `;
@@ -2471,8 +2448,8 @@ class NoticeBoard {
         const container = document.getElementById(instanceId);
         if (!container) return;
         
-        const scrollContent = container.querySelector('.csv-scroll-content');
-        const pauseBtn = container.querySelector('.csv-control-btn i.fa-pause, .csv-control-btn i.fa-play');
+        const scrollContent = container.querySelector('.scrolling-animation');
+        const pauseBtn = container.querySelector('.scroll-btn i.fa-pause, .scroll-btn i.fa-play');
         
         if (scrollContent.style.animationPlayState === 'paused') {
             scrollContent.style.animationPlayState = 'running';
@@ -2490,7 +2467,7 @@ class NoticeBoard {
         const container = document.getElementById(instanceId);
         if (!container) return;
         
-        const scrollContent = container.querySelector('.csv-scroll-content');
+        const scrollContent = container.querySelector('.scrolling-animation');
         const currentDuration = parseFloat(scrollContent.dataset.animationDuration) || 20;
         
         let newDuration;
@@ -2518,8 +2495,8 @@ class NoticeBoard {
         const container = document.getElementById(instanceId);
         if (!container) return;
         
-        const scrollContent = container.querySelector('.csv-scroll-content');
-        const manualBtn = container.querySelector('.csv-control-btn:nth-child(4) i');
+        const scrollContent = container.querySelector('.scrolling-animation');
+        const manualBtn = container.querySelector('.scroll-btn:nth-child(4) i');
         
         if (scrollContent.classList.contains('manual-scroll')) {
             // Disable manual scroll
@@ -2542,7 +2519,7 @@ class NoticeBoard {
         const container = document.getElementById(instanceId);
         if (!container) return;
         
-        const scrollContent = container.querySelector('.csv-scroll-content');
+        const scrollContent = container.querySelector('.scrolling-animation');
         
         // Reset animation
         scrollContent.style.animation = 'none';
@@ -2561,7 +2538,7 @@ class NoticeBoard {
         console.log(`Found ${scrollContainers.length} CSV scrolling containers`);
         
         scrollContainers.forEach(container => {
-            const scrollContent = container.querySelector('.csv-scroll-content');
+            const scrollContent = container.querySelector('.scrolling-animation');
             if (scrollContent) {
                 const duration = scrollContent.dataset.animationDuration || '25';
                 console.log(`Initializing animation for container ${container.id} with duration ${duration}s`);
@@ -2584,7 +2561,7 @@ class NoticeBoard {
     
     // Initialize hover and touch interactions for scrolling
     initializeScrollInteractions(container) {
-        const scrollContent = container.querySelector('.csv-scroll-content');
+        const scrollContent = container.querySelector('.scrolling-animation');
         if (!scrollContent) return;
         
         let hoverTimeout;
@@ -2682,50 +2659,12 @@ class NoticeBoard {
     
     // Initialize horizontal scroll indicators for mobile
     initializeHorizontalScrollIndicators(container) {
-        const tableWrapper = container.querySelector('.csv-table-wrapper');
-        const table = container.querySelector('.csv-table');
+        const scrollArea = container.querySelector('.scrolling-content-area');
         
-        if (!tableWrapper || !table) return;
+        if (!scrollArea) return;
         
-        const updateScrollIndicators = () => {
-            const wrapperWidth = tableWrapper.clientWidth;
-            const tableWidth = table.scrollWidth;
-            const scrollLeft = tableWrapper.scrollLeft;
-            const maxScrollLeft = tableWidth - wrapperWidth;
-            
-            // Check if table overflows horizontally
-            if (tableWidth > wrapperWidth) {
-                tableWrapper.classList.add('has-overflow');
-                
-                // Show left indicator if can scroll left
-                if (scrollLeft > 10) {
-                    tableWrapper.classList.add('scrollable-left');
-                } else {
-                    tableWrapper.classList.remove('scrollable-left');
-                }
-                
-                // Show right indicator if can scroll right
-                if (scrollLeft < maxScrollLeft - 10) {
-                    tableWrapper.classList.add('scrollable-right');
-                } else {
-                    tableWrapper.classList.remove('scrollable-right');
-                }
-            } else {
-                tableWrapper.classList.remove('has-overflow', 'scrollable-left', 'scrollable-right');
-            }
-        };
-        
-        // Update indicators on scroll
-        tableWrapper.addEventListener('scroll', updateScrollIndicators);
-        
-        // Update indicators on resize
-        window.addEventListener('resize', updateScrollIndicators);
-        
-        // Initial update
-        setTimeout(updateScrollIndicators, 100);
-        
-        // Store reference for cleanup
-        container._updateScrollIndicators = updateScrollIndicators;
+        // No scroll indicators needed for inline pipe format
+        return;
     }
 
     handleKeyboardShortcuts(e) {

@@ -1292,16 +1292,21 @@ body {
 }
 
 .csv-table-wrapper {
-  height: 200px;
-  overflow: hidden;
+  height: 160px;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
   border-radius: var(--radius-md);
   border: 2px solid var(--border-color);
   background: var(--bg-color);
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) var(--surface-color);
+  padding: var(--spacing-sm);
 }
 
 .csv-table {
+  display: none !important;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -1365,9 +1370,103 @@ body {
   animation-play-state: running;
 }
 
-/* Hide mobile format on desktop */
+/* Show pipe-separated format on all screens - Updated: 2025-07-08 */
+.csv-pipe-format,
 .csv-mobile-format {
-  display: none;
+  display: block !important;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  line-height: 1.7;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  height: 100%;
+  overflow: hidden;
+  background: var(--surface-color);
+  border-radius: 8px;
+  padding: var(--spacing-sm);
+}
+
+.csv-pipe-format .csv-scroll-content,
+.csv-mobile-format .csv-scroll-content {
+  animation: scroll-csv-smooth var(--scroll-duration, 25s) linear infinite;
+  position: relative;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  animation-fill-mode: both;
+  animation-play-state: running;
+}
+
+.csv-mobile-row {
+  display: block;
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.csv-mobile-row:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+.csv-mobile-row:hover {
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 4px;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+/* Style pipe separators */
+.csv-pipe-separator {
+  color: var(--primary-color);
+  font-weight: bold;
+  margin: 0 6px;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+
+/* Style numeric values (amounts) */
+.csv-amount {
+  color: var(--accent-color);
+  font-weight: 600;
+  background: rgba(102, 126, 234, 0.1);
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Force hide table format on all screens */
+.csv-data-container .csv-table,
+.csv-table-wrapper .csv-table,
+table.csv-table,
+.csv-table .csv-row,
+.csv-table .csv-cell,
+.csv-table .csv-thead,
+.csv-table .csv-tbody,
+.csv-row,
+.csv-cell,
+.csv-thead,
+.csv-tbody {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Force hide scroll indicators */
+.csv-scroll-indicators {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Force show pipe format everywhere */
+.csv-data-container .csv-mobile-format,
+.csv-table-wrapper .csv-mobile-format,
+.csv-data-container .csv-pipe-format,
+.csv-table-wrapper .csv-pipe-format {
+  display: block !important;
+  visibility: visible !important;
 }
 
 .csv-row {
@@ -1695,125 +1794,123 @@ body {
   background: linear-gradient(135deg, #6b7280, #4b5563);
 }
 
-/* Mobile Responsive Optimizations - Pipe-separated format */
-@media (max-width: 768px) {
-  .csv-table-wrapper {
-    height: 160px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    position: relative;
-    scrollbar-width: thin;
-    scrollbar-color: var(--primary-color) var(--surface-color);
-    padding: var(--spacing-sm);
-  }
-  
-  .csv-table-wrapper::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  .csv-table-wrapper::-webkit-scrollbar-track {
-    background: var(--surface-color);
-    border-radius: 4px;
-  }
-  
-  .csv-table-wrapper::-webkit-scrollbar-thumb {
-    background: var(--primary-color);
-    border-radius: 4px;
-  }
-  
-  .csv-table-wrapper::-webkit-scrollbar-thumb:hover {
-    background: var(--primary-dark);
-  }
-  
-  /* Hide table structure on mobile */
-  .csv-table {
-    display: none !important;
-  }
-  
-  /* Hide scroll indicators on mobile */
-  .csv-scroll-indicators {
-    display: none !important;
-  }
-  
-  /* Create pipe-separated mobile format */
-  .csv-mobile-format {
-    display: block !important;
-    font-family: 'Courier New', monospace;
-    line-height: 1.6;
-    font-size: var(--font-size-sm);
-    color: var(--text-primary);
-    height: 100%;
-    overflow: hidden;
-  }
-  
-  .csv-mobile-format .csv-scroll-content {
-    animation: scroll-csv-smooth var(--scroll-duration, 25s) linear infinite;
-    position: relative;
-    will-change: transform;
-    backface-visibility: hidden;
-    transform: translateZ(0);
-    animation-fill-mode: both;
-    animation-play-state: running;
-  }
-  
-  .csv-mobile-row {
-    display: block;
-    padding: var(--spacing-xs) 0;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
-  
-  .csv-mobile-row:nth-child(even) {
-    background: rgba(0, 0, 0, 0.02);
-    border-radius: 4px;
-    padding: var(--spacing-xs) var(--spacing-sm);
-  }
-  
-  .csv-mobile-row:hover {
-    background: rgba(102, 126, 234, 0.05);
-    border-radius: 4px;
-    padding: var(--spacing-xs) var(--spacing-sm);
-  }
-  
-  /* Style pipe separators */
-  .csv-pipe-separator {
-    color: var(--primary-color);
-    font-weight: bold;
-    margin: 0 4px;
-  }
-  
-  /* Style numeric values (amounts) */
-  .csv-amount {
-    color: var(--primary-color);
-    font-weight: 600;
-  }
-  
-  .csv-controls {
-    gap: var(--spacing-xs);
-    margin-top: var(--spacing-sm);
-  }
-  
-  .csv-control-btn {
-    min-width: 28px;
-    height: 28px;
-    padding: var(--spacing-xs);
-    font-size: var(--font-size-xs);
-  }
-  
-  /* Show mobile format indicator */
-  .csv-data-container::after {
-    content: "Mobile format: All columns displayed";
-    position: absolute;
-    bottom: 8px;
-    right: 12px;
-    font-size: 10px;
-    color: var(--text-muted);
-    background: rgba(0, 0, 0, 0.05);
-    padding: 2px 6px;
-    border-radius: 4px;
-    pointer-events: none;
-  }
+/* Universal Pipe-separated format for all screen sizes - FORCE RELOAD: 2025-07-08-22:50 */
+
+.csv-table-wrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.csv-table-wrapper::-webkit-scrollbar-track {
+  background: var(--surface-color);
+  border-radius: 4px;
+}
+
+.csv-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 4px;
+}
+
+.csv-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-dark);
+}
+
+.csv-controls {
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
+.csv-control-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+}
+
+/* Inline Scrolling Message Styles */
+.scrolling-message-inline {
+  margin: var(--spacing-md) 0;
+  background: rgba(var(--primary-rgb), 0.05);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  border: 1px solid rgba(var(--primary-rgb), 0.1);
+}
+
+.scrolling-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  color: var(--primary-color);
+  margin-bottom: var(--spacing-sm);
+}
+
+.scrolling-label i {
+  font-size: 1.1em;
+}
+
+.scrolling-count {
+  font-size: var(--font-size-xs);
+  background: var(--primary-color);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.scrolling-separator {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+  margin: var(--spacing-sm) 0;
+}
+
+.scrolling-content-area {
+  height: 120px;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-color);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.scrolling-animation {
+  animation: scroll-csv-smooth var(--scroll-duration, 25s) linear infinite;
+  position: relative;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.scrolling-controls {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
+.scroll-btn {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-xs);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
+}
+
+.scroll-btn:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
 }
 
 @media (max-width: 480px) {
