@@ -21,11 +21,14 @@ class NoticeBoard {
         this.fileHostingService = '0x0.st';
         this.allowedFileTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
         
+        // Store CSV data
+        this.csvData = {};
+        
         this.init();
         this.initializeSubHeader();
     }
 
-    init() {
+    async init() {
         this.initializeElements();
         this.attachEventListeners();
         this.initializeQuill();
@@ -34,8 +37,147 @@ class NoticeBoard {
         this.initializeCloudSync();
         // this.initializeFileHosting(); // Disabled - using local compression instead
         this.applyTheme();
-        this.render();
+        
+        // Load all CSV files at startup
+        await this.loadAllCSVFiles();
+        
+        // Initialize with demo scrolling notice if no notices exist
+        if (this.notices.length === 0) {
+            this.createDemoScrollingNotice();
+        } else {
+            // Check if we have any scrolling notices, if not create one for testing
+            const hasScrollingNotice = this.notices.some(notice => notice.scrollingEnabled);
+            if (!hasScrollingNotice) {
+                console.log('No scrolling notices found, creating demo scrolling notice');
+                this.createDemoScrollingNotice();
+            }
+        }
+        
+        await this.render();
         // Removed automatic sync polling - only sync on page load and manual refresh
+    }
+
+    // Create a demo notice with scrolling messages to showcase the feature
+    createDemoScrollingNotice() {
+        const demoNotice = {
+            id: `demo-${Date.now()}`,
+            title: 'Fee Dues Notice - Student List',
+            content: '<p><strong>Important Notice:</strong> The following students have pending fee dues. Please contact the accounts office immediately to clear your dues.</p><p>Payment can be made at the college office during working hours (9:00 AM - 4:00 PM).</p><p>For any queries, contact the accounts department at extension 234.</p>',
+            category: 'fee-payments',
+            priority: 'high',
+            date: new Date().toISOString().split('T')[0],
+            deadline: null,
+            author: 'Accounts Department',
+            tags: ['fees', 'payment', 'urgent', 'students'],
+            timestamp: new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            scrollingEnabled: true,
+            scrollingLabel: 'Student Fee Dues List',
+            order: 1
+        };
+        
+        this.notices.unshift(demoNotice);
+        this.saveToStorage();
+        
+        console.log('Demo scrolling notice created successfully');
+    }
+
+    // Load all available CSV files at startup
+    async loadAllCSVFiles() {
+        console.log('Loading CSV files at startup...');
+        
+        // Try to load CSV files numbered 1-10 (common range)
+        for (let i = 1; i <= 10; i++) {
+            try {
+                const csvText = await this.fetchCSVFile(i);
+                if (csvText) {
+                    const parsedData = this.parseCSVToText(csvText);
+                    this.csvData[i] = parsedData;
+                    console.log(`Loaded CSV file ${i}.csv with ${parsedData.split('\n').length} lines`);
+                }
+            } catch (error) {
+                // File doesn't exist or error loading, skip silently
+                console.log(`CSV file ${i}.csv not found or error loading`);
+            }
+        }
+        
+        console.log(`Loaded ${Object.keys(this.csvData).length} CSV files`);
+    }
+
+    // Fetch CSV file content
+    async fetchCSVFile(fileNumber) {
+        try {
+            const response = await fetch(`${fileNumber}.csv`);
+            if (response.ok) {
+                return await response.text();
+            }
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    // Parse CSV to formatted text
+    parseCSVToText(csvText) {
+        const lines = csvText.trim().split('\n').filter(line => line.trim());
+        if (lines.length === 0) return '';
+
+        const formattedLines = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            const values = line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
+            
+            if (i === 0) {
+                // Header line - make it bold/uppercase
+                formattedLines.push(values.join(' | ').toUpperCase());
+                formattedLines.push('─'.repeat(values.join(' | ').length)); // Separator line
+            } else {
+                // Data lines - format as needed
+                if (values.length >= 3) {
+                    // Assuming format: Sl No, Student Name, Fee Dues
+                    const slNo = values[0].padStart(3, ' ');
+                    const name = values[1].padEnd(25, ' ');
+                    const fee = values[2].includes('₹') ? values[2] : `₹${values[2]}`;
+                    formattedLines.push(`${slNo}. ${name} ${fee}`);
+                } else {
+                    // Fallback: just join with separators
+                    formattedLines.push(values.join(' | '));
+                }
+            }
+        }
+        
+        return formattedLines.join('\n');
+    }
+
+    // Create simple scrolling text HTML
+    createScrollingTextHTML(csvText, label) {
+        const lines = csvText.split('\n');
+        const totalLines = lines.length;
+        
+        // Create line elements
+        const lineElements = lines.map(line => `<div class="scroll-line">${line}</div>`).join('');
+        
+        // Duplicate content for seamless loop
+        const duplicatedContent = lineElements + lineElements;
+        
+        // Calculate animation duration based on content length (slower for more content)
+        const animationDuration = Math.max(totalLines * 2, 60); // Minimum 60 seconds
+        
+        // Create scrolling content with animation
+        return `
+            <div class="scrolling-message">
+                <h4 class="scrolling-label">
+                    <i class="fas fa-list"></i> ${label}
+                    <span class="record-count">(${totalLines - 2} records)</span>
+                </h4>
+                <div class="scrolling-content">
+                    <div class="scrolling-text" style="animation-duration: ${animationDuration}s;">
+                        ${duplicatedContent}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     initializeElements() {
@@ -71,6 +213,9 @@ class NoticeBoard {
         this.noticeDeadline = document.getElementById('noticeDeadline');
         this.noticeAuthor = document.getElementById('noticeAuthor');
         this.noticeTags = document.getElementById('noticeTags');
+        this.scrollingEnabled = document.getElementById('scrollingEnabled');
+        this.scrollingLabel = document.getElementById('scrollingLabel');
+        this.scrollingOptions = document.getElementById('scrollingOptions');
 
         // Admin elements
         this.adminCode = document.getElementById('adminCode');
@@ -140,6 +285,13 @@ class NoticeBoard {
         if (fileAttachments) {
             fileAttachments.addEventListener('change', (e) => this.handleFileSelection(e));
             this.setupFileDragDrop();
+        }
+
+        // Scrolling messages toggle
+        if (this.scrollingEnabled) {
+            this.scrollingEnabled.addEventListener('change', (e) => {
+                this.scrollingOptions.style.display = e.target.checked ? 'block' : 'none';
+            });
         }
 
         // Export options
@@ -1127,10 +1279,10 @@ class NoticeBoard {
         activeBtn.classList.add('active');
     }
 
-    handleCategoryFilter(category) {
+    async handleCategoryFilter(category) {
         this.currentFilter = category;
         this.applyFiltersAndSort();
-        this.render();
+        await this.render();
     }
 
     updateCategoryTabs() {
@@ -1203,21 +1355,25 @@ class NoticeBoard {
         this.filteredNotices = filtered;
     }
 
-    render() {
+    async render() {
         if (this.filteredNotices.length === 0) {
             this.noticesContainer.innerHTML = '';
             this.emptyState.style.display = 'block';
         } else {
             this.emptyState.style.display = 'none';
-            this.renderNotices();
+            await this.renderNotices();
         }
         this.renderActiveTags();
         this.updateCategoryTabs();
     }
 
-    renderNotices() {
-        const noticesHTML = this.filteredNotices.map((notice, index) => this.createNoticeCard(notice, index + 1)).join('');
-        this.noticesContainer.innerHTML = noticesHTML;
+    async renderNotices() {
+        const noticesHTML = await Promise.all(
+            this.filteredNotices.map((notice, index) => this.createNoticeCard(notice, index + 1))
+        );
+        this.noticesContainer.innerHTML = noticesHTML.join('');
+        
+        // Simple scrolling animations are handled by CSS
         
         // Add event listeners to notice cards
         this.filteredNotices.forEach(notice => {
@@ -1257,7 +1413,7 @@ class NoticeBoard {
         });
     }
 
-    createNoticeCard(notice, serialNumber) {
+    async createNoticeCard(notice, serialNumber) {
         const deadlineInfo = this.getDeadlineInfo(notice.deadline);
         const categoryClass = `category-${notice.category.replace(/\s+/g, '-')}`;
         const priorityClass = `priority-${notice.priority}`;
@@ -1294,6 +1450,28 @@ class NoticeBoard {
         
         // Format serial number with leading zero
         const formattedSerialNumber = serialNumber.toString().padStart(2, '0');
+        
+        // Add scrolling CSV content if enabled
+        let scrollingHTML = '';
+        if (notice.scrollingEnabled && notice.scrollingLabel) {
+            const csvFileNumber = notice.order || 1;
+            console.log(`Adding scrolling content for notice "${notice.title}" using CSV ${csvFileNumber}`);
+            
+            if (this.csvData[csvFileNumber]) {
+                console.log(`CSV data found for file ${csvFileNumber}, creating scrolling text`);
+                scrollingHTML = this.createScrollingTextHTML(this.csvData[csvFileNumber], notice.scrollingLabel);
+            } else {
+                console.log(`No CSV data found for file ${csvFileNumber}`);
+                scrollingHTML = `
+                    <div class="scrolling-message">
+                        <h4 class="scrolling-label">${notice.scrollingLabel}</h4>
+                        <div class="scrolling-content">
+                            <p style="color: #999; font-style: italic;">No data available</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
 
         return `
             <div class="notice-card priority-${notice.priority}-card" data-notice-id="${notice.id}">
@@ -1333,6 +1511,7 @@ class NoticeBoard {
                     <div class="notice-content">
                         ${processedContent}
                     </div>
+                    ${scrollingHTML}
                     ${attachmentsHTML}
                     ${tagsHTML ? `
                         <div class="notice-tags">${tagsHTML}</div>
@@ -1526,6 +1705,11 @@ class NoticeBoard {
         this.currentAttachments = notice.attachments ? [...notice.attachments] : [];
         this.renderAttachmentsPreview();
         
+        // Populate scrolling options
+        this.scrollingEnabled.checked = notice.scrollingEnabled || false;
+        this.scrollingLabel.value = notice.scrollingLabel || '';
+        this.scrollingOptions.style.display = notice.scrollingEnabled ? 'block' : 'none';
+        
         // Set order
         const orderSelect = document.getElementById('noticeOrder');
         if (orderSelect) {
@@ -1545,6 +1729,9 @@ class NoticeBoard {
         this.quillEditor.root.innerHTML = '';
         this.currentTags = [];
         this.currentAttachments = [];
+        this.scrollingEnabled.checked = false;
+        this.scrollingLabel.value = '';
+        this.scrollingOptions.style.display = 'none';
         this.renderTagsDisplay();
         this.renderAttachmentsPreview();
     }
@@ -1611,6 +1798,8 @@ class NoticeBoard {
             author: this.noticeAuthor.value.trim(),
             tags: this.currentTags.length > 0 ? this.currentTags : null,
             attachments: this.currentAttachments.length > 0 ? this.currentAttachments : null,
+            scrollingEnabled: this.scrollingEnabled.checked,
+            scrollingLabel: this.scrollingLabel.value.trim() || null,
             order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
@@ -1988,6 +2177,315 @@ class NoticeBoard {
 
     getCurrentDateString() {
         return new Date().toISOString().split('T')[0];
+    }
+
+    async loadCSVData(fileNumber) {
+        try {
+            const csvFileName = `${fileNumber}.csv`;
+            console.log(`Attempting to load CSV file: ${csvFileName}`);
+            
+            const response = await fetch(csvFileName);
+            
+            if (!response.ok) {
+                console.log(`CSV file ${csvFileName} not found (status: ${response.status})`);
+                return null;
+            }
+            
+            const csvText = await response.text();
+            console.log(`CSV file ${csvFileName} loaded successfully, content length: ${csvText.length}`);
+            
+            if (!csvText.trim()) {
+                console.log(`CSV file ${csvFileName} is empty`);
+                return null;
+            }
+            
+            const parsedData = this.parseCSV(csvText);
+            console.log(`Parsed CSV data for ${csvFileName}:`, parsedData);
+            
+            return parsedData;
+        } catch (error) {
+            console.error(`Error loading CSV file ${fileNumber}.csv:`, error);
+            return null;
+        }
+    }
+
+    parseCSV(csvText) {
+        const lines = csvText.trim().split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+            console.log('CSV parsing failed: insufficient data lines');
+            return null;
+        }
+        
+        const headers = lines[0].split(',').map(header => header.trim().replace(/^"|"$/g, ''));
+        const rows = [];
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue; // Skip empty lines
+            
+            const values = line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
+            if (values.length >= headers.length) {
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] || '';
+                });
+                rows.push(row);
+            } else {
+                console.log(`Skipping malformed CSV line ${i + 1}: ${line}`);
+            }
+        }
+        
+        console.log(`CSV parsing completed: ${headers.length} columns, ${rows.length} rows`);
+        return { headers, rows };
+    }
+
+    createScrollingMessageHTML(csvData, label) {
+        // Enhanced error handling and empty state
+        if (!csvData || !csvData.rows || csvData.rows.length === 0) {
+            return this.createEmptyScrollingMessage(label);
+        }
+
+        try {
+            // Sanitize and format data
+            const sanitizedData = this.sanitizeCSVData(csvData);
+            
+            // Create enhanced table header with improved styling
+            const headerHTML = sanitizedData.headers.map((header, index) => {
+                const sanitizedHeader = this.escapeHtml(header);
+                return `<th class="csv-header" data-column="${index}" title="${sanitizedHeader}">${sanitizedHeader}</th>`;
+            }).join('');
+
+            // Create optimized row HTML with enhanced data formatting
+            const createRowHTML = (row, index) => {
+                const cellsHTML = sanitizedData.headers.map((header, colIndex) => {
+                    const cellValue = this.formatCellValue(row[header] || '', header, colIndex);
+                    const sanitizedValue = this.escapeHtml(cellValue);
+                    return `<td class="csv-cell" data-column="${colIndex}" title="${sanitizedValue}">${sanitizedValue}</td>`;
+                }).join('');
+                return `<tr class="csv-row" data-row="${index}">${cellsHTML}</tr>`;
+            };
+
+            // Create original rows with enhanced indexing
+            const originalRowsHTML = sanitizedData.rows.map((row, index) => createRowHTML(row, index)).join('');
+            
+            // Create duplicate rows for seamless infinite scrolling
+            const duplicatedRowsHTML = sanitizedData.rows.map((row, index) => 
+                createRowHTML(row, index + sanitizedData.rows.length)
+            ).join('');
+            
+            // Combine all rows
+            const allRowsHTML = originalRowsHTML + duplicatedRowsHTML;
+
+            // Enhanced timing calculation with adaptive speed
+            const totalRows = sanitizedData.rows.length;
+            const baseSpeed = this.calculateOptimalScrollSpeed(totalRows);
+            const animationDuration = Math.max(totalRows * baseSpeed, 15); // Minimum 15 seconds
+            
+            // Generate unique ID for this scrolling instance
+            const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            return `
+                <div class="csv-data-container" id="${instanceId}" data-rows="${totalRows}">
+                    <div class="csv-label">
+                        <i class="fas fa-table"></i>
+                        ${this.escapeHtml(label)}
+                        <span class="csv-row-count">(${totalRows} records)</span>
+                    </div>
+                    <div class="csv-table-wrapper">
+                        <table class="csv-table">
+                            <thead class="csv-thead">
+                                <tr>${headerHTML}</tr>
+                            </thead>
+                            <tbody class="csv-tbody">
+                                <div class="csv-scroll-container">
+                                    <div class="csv-scroll-content" 
+                                         style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
+                                         data-animation-duration="${animationDuration}"
+                                         data-total-rows="${totalRows}">
+                                        ${allRowsHTML}
+                                    </div>
+                                </div>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="csv-controls">
+                        <button class="csv-control-btn" onclick="noticeBoard.toggleScrollAnimation('${instanceId}')" title="Pause/Resume scrolling">
+                            <i class="fas fa-pause"></i>
+                        </button>
+                        <button class="csv-control-btn" onclick="noticeBoard.adjustScrollSpeed('${instanceId}', 'slower')" title="Slower scrolling">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="csv-control-btn" onclick="noticeBoard.adjustScrollSpeed('${instanceId}', 'faster')" title="Faster scrolling">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Error creating scrolling message HTML:', error);
+            return this.createErrorScrollingMessage(label, error.message);
+        }
+    }
+
+    // Helper method to create empty state for scrolling messages
+    createEmptyScrollingMessage(label) {
+        return `
+            <div class="csv-data-container csv-empty">
+                <div class="csv-label">
+                    <i class="fas fa-table"></i>
+                    ${this.escapeHtml(label)}
+                </div>
+                <div class="csv-error">
+                    <i class="fas fa-inbox"></i>
+                    <span>No data available</span>
+                    <small>CSV file may be empty or not found</small>
+                </div>
+            </div>
+        `;
+    }
+
+    // Helper method to create error state for scrolling messages
+    createErrorScrollingMessage(label, errorMessage) {
+        return `
+            <div class="csv-data-container csv-error-state">
+                <div class="csv-label">
+                    <i class="fas fa-table"></i>
+                    ${this.escapeHtml(label)}
+                </div>
+                <div class="csv-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Error loading data</span>
+                    <small>${this.escapeHtml(errorMessage)}</small>
+                </div>
+            </div>
+        `;
+    }
+
+    // Helper method to sanitize CSV data
+    sanitizeCSVData(csvData) {
+        const sanitizedHeaders = csvData.headers.map(header => 
+            header.toString().trim().substring(0, 50) // Limit header length
+        );
+        
+        const sanitizedRows = csvData.rows.map(row => {
+            const sanitizedRow = {};
+            sanitizedHeaders.forEach(header => {
+                const originalHeader = csvData.headers.find(h => h.toString().trim().substring(0, 50) === header);
+                sanitizedRow[header] = (row[originalHeader] || '').toString().trim().substring(0, 100); // Limit cell length
+            });
+            return sanitizedRow;
+        });
+        
+        return {
+            headers: sanitizedHeaders,
+            rows: sanitizedRows
+        };
+    }
+
+    // Helper method to format cell values based on column type
+    formatCellValue(value, header, columnIndex) {
+        if (!value) return '';
+        
+        const valueStr = value.toString().trim();
+        
+        // Format based on column type detection
+        if (columnIndex === 0 || header.toLowerCase().includes('sl') || header.toLowerCase().includes('no')) {
+            // Serial number formatting
+            return valueStr;
+        } else if (header.toLowerCase().includes('fee') || header.toLowerCase().includes('amount') || header.toLowerCase().includes('dues')) {
+            // Currency formatting
+            const numValue = parseFloat(valueStr.replace(/[^0-9.-]/g, ''));
+            if (!isNaN(numValue)) {
+                return `₹${numValue.toLocaleString('en-IN')}`;
+            }
+        } else if (header.toLowerCase().includes('name')) {
+            // Name formatting - title case
+            return valueStr.split(' ').map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            ).join(' ');
+        }
+        
+        return valueStr;
+    }
+
+    // Helper method to calculate optimal scroll speed
+    calculateOptimalScrollSpeed(rowCount) {
+        if (rowCount <= 10) return 3.0;  // Slower for fewer rows
+        if (rowCount <= 50) return 2.5;
+        if (rowCount <= 100) return 2.0;
+        return 1.5; // Faster for many rows
+    }
+
+    // Helper method to escape HTML
+    escapeHtml(text) {
+        if (typeof text !== 'string') {
+            text = String(text);
+        }
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Control methods for scrolling animation
+    toggleScrollAnimation(instanceId) {
+        const container = document.getElementById(instanceId);
+        if (!container) return;
+        
+        const scrollContent = container.querySelector('.csv-scroll-content');
+        const pauseBtn = container.querySelector('.csv-control-btn i.fa-pause, .csv-control-btn i.fa-play');
+        
+        if (scrollContent.style.animationPlayState === 'paused') {
+            scrollContent.style.animationPlayState = 'running';
+            pauseBtn.className = 'fas fa-pause';
+        } else {
+            scrollContent.style.animationPlayState = 'paused';
+            pauseBtn.className = 'fas fa-play';
+        }
+    }
+
+    // Method to adjust scroll speed dynamically
+    adjustScrollSpeed(instanceId, direction) {
+        const container = document.getElementById(instanceId);
+        if (!container) return;
+        
+        const scrollContent = container.querySelector('.csv-scroll-content');
+        const currentDuration = parseFloat(scrollContent.dataset.animationDuration) || 20;
+        
+        let newDuration;
+        if (direction === 'faster') {
+            newDuration = Math.max(currentDuration * 0.8, 5); // Minimum 5 seconds
+        } else {
+            newDuration = Math.min(currentDuration * 1.2, 60); // Maximum 60 seconds
+        }
+        
+        scrollContent.style.setProperty('--scroll-duration', `${newDuration}s`);
+        scrollContent.dataset.animationDuration = newDuration;
+        
+        // Restart animation with new timing
+        scrollContent.style.animation = 'none';
+        scrollContent.offsetHeight; // Trigger reflow
+        scrollContent.style.animation = `scroll-csv-smooth ${newDuration}s linear infinite`;
+    }
+
+    // Initialize scrolling animations after DOM insertion
+    initializeScrollingAnimations() {
+        const scrollContainers = document.querySelectorAll('.csv-data-container');
+        console.log(`Found ${scrollContainers.length} CSV scrolling containers`);
+        
+        scrollContainers.forEach(container => {
+            const scrollContent = container.querySelector('.csv-scroll-content');
+            if (scrollContent) {
+                const duration = scrollContent.dataset.animationDuration || '25';
+                console.log(`Initializing animation for container ${container.id} with duration ${duration}s`);
+                
+                // Ensure animation is properly applied
+                scrollContent.style.setProperty('--scroll-duration', `${duration}s`);
+                scrollContent.style.animation = `scroll-csv-smooth ${duration}s linear infinite`;
+                
+                // Force reflow to ensure animation starts
+                scrollContent.offsetHeight;
+            }
+        });
     }
 
     handleKeyboardShortcuts(e) {

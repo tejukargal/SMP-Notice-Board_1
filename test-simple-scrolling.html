@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Scrolling Test</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="app-title">
+                    <i class="fas fa-graduation-cap"></i>
+                    Simple Scrolling Test
+                </h1>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div style="max-width: 800px; margin: 0 auto;">
+                <h2>Testing Simple Scrolling Messages</h2>
+                <p>This tests the simple text-based scrolling within a notice card.</p>
+                
+                <div class="notice-card">
+                    <div class="notice-card-header priority-high">
+                        <div class="header-top">
+                            <h3 class="notice-title">Fee Dues Notice - Student List</h3>
+                            <div class="header-right">
+                                <div class="notice-serial-number">01</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="notice-card-body">
+                        <div class="notice-content">
+                            <p><strong>Important Notice:</strong> The following students have pending fee dues.</p>
+                        </div>
+                        
+                        <!-- Test scrolling content -->
+                        <div class="scrolling-message">
+                            <h4 class="scrolling-label">
+                                <i class="fas fa-list"></i> Student Fee Dues List
+                                <span class="record-count">(153 records)</span>
+                            </h4>
+                            <div class="scrolling-content">
+                                <div class="scrolling-text" id="scrollingText">
+                                    <!-- Content will be loaded via JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Load and display CSV content
+        async function loadScrollingContent() {
+            try {
+                console.log('Loading CSV content...');
+                const response = await fetch('1.csv');
+                if (!response.ok) {
+                    throw new Error('CSV file not found');
+                }
+                
+                const csvText = await response.text();
+                const lines = csvText.trim().split('\n').filter(line => line.trim());
+                
+                const formattedLines = [];
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    const values = line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
+                    
+                    if (i === 0) {
+                        // Header line
+                        formattedLines.push(values.join(' | ').toUpperCase());
+                        formattedLines.push('─'.repeat(values.join(' | ').length));
+                    } else {
+                        // Data lines
+                        if (values.length >= 3) {
+                            const slNo = values[0].padStart(3, ' ');
+                            const name = values[1].padEnd(25, ' ');
+                            const fee = values[2].includes('₹') ? values[2] : `₹${values[2]}`;
+                            formattedLines.push(`${slNo}. ${name} ${fee}`);
+                        }
+                    }
+                }
+                
+                const lineElements = formattedLines.map(line => 
+                    `<div class="scroll-line">${line}</div>`
+                ).join('');
+                
+                // Duplicate content for seamless loop
+                const duplicatedContent = lineElements + lineElements;
+                
+                const scrollingTextElement = document.getElementById('scrollingText');
+                scrollingTextElement.innerHTML = duplicatedContent;
+                
+                console.log('CSV content loaded and formatted');
+                
+            } catch (error) {
+                console.error('Error loading CSV:', error);
+                document.getElementById('scrollingText').innerHTML = 
+                    '<div class="scroll-line" style="color: #999; font-style: italic;">Error loading data</div>';
+            }
+        }
+        
+        // Load content when page loads
+        document.addEventListener('DOMContentLoaded', loadScrollingContent);
+    </script>
+</body>
+</html>
