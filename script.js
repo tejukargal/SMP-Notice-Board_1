@@ -2318,6 +2318,12 @@ class NoticeBoard {
                         <button class="csv-control-btn" onclick="noticeBoard.adjustScrollSpeed('${instanceId}', 'faster')" title="Faster scrolling">
                             <i class="fas fa-plus"></i>
                         </button>
+                        <button class="csv-control-btn" onclick="noticeBoard.toggleManualScroll('${instanceId}')" title="Manual scroll mode">
+                            <i class="fas fa-hand-paper"></i>
+                        </button>
+                        <button class="csv-control-btn" onclick="noticeBoard.resetScrollPosition('${instanceId}')" title="Reset to top">
+                            <i class="fas fa-undo"></i>
+                        </button>
                     </div>
                 </div>
             `;
@@ -2437,9 +2443,11 @@ class NoticeBoard {
         if (scrollContent.style.animationPlayState === 'paused') {
             scrollContent.style.animationPlayState = 'running';
             pauseBtn.className = 'fas fa-pause';
+            this.showToast('Scrolling resumed', 'info');
         } else {
             scrollContent.style.animationPlayState = 'paused';
             pauseBtn.className = 'fas fa-play';
+            this.showToast('Scrolling paused', 'info');
         }
     }
 
@@ -2465,6 +2473,52 @@ class NoticeBoard {
         scrollContent.style.animation = 'none';
         scrollContent.offsetHeight; // Trigger reflow
         scrollContent.style.animation = `scroll-csv-smooth ${newDuration}s linear infinite`;
+        
+        // Show speed feedback
+        const speedText = direction === 'faster' ? 'Faster' : 'Slower';
+        this.showToast(`Scrolling speed: ${speedText}`, 'info');
+    }
+    
+    // Toggle manual scroll mode
+    toggleManualScroll(instanceId) {
+        const container = document.getElementById(instanceId);
+        if (!container) return;
+        
+        const scrollContent = container.querySelector('.csv-scroll-content');
+        const manualBtn = container.querySelector('.csv-control-btn:nth-child(4) i');
+        
+        if (scrollContent.classList.contains('manual-scroll')) {
+            // Disable manual scroll
+            scrollContent.classList.remove('manual-scroll');
+            scrollContent.style.animationPlayState = 'running';
+            scrollContent.style.transform = '';
+            manualBtn.className = 'fas fa-hand-paper';
+            this.showToast('Auto-scroll enabled', 'info');
+        } else {
+            // Enable manual scroll
+            scrollContent.classList.add('manual-scroll');
+            scrollContent.style.animationPlayState = 'paused';
+            manualBtn.className = 'fas fa-hand-rock';
+            this.showToast('Manual scroll enabled - drag to scroll', 'info');
+        }
+    }
+    
+    // Reset scroll position to top
+    resetScrollPosition(instanceId) {
+        const container = document.getElementById(instanceId);
+        if (!container) return;
+        
+        const scrollContent = container.querySelector('.csv-scroll-content');
+        
+        // Reset animation
+        scrollContent.style.animation = 'none';
+        scrollContent.style.transform = '';
+        scrollContent.offsetHeight; // Trigger reflow
+        
+        const duration = scrollContent.dataset.animationDuration || '25';
+        scrollContent.style.animation = `scroll-csv-smooth ${duration}s linear infinite`;
+        
+        this.showToast('Scroll position reset', 'info');
     }
 
     // Initialize scrolling animations after DOM insertion
@@ -2482,8 +2536,77 @@ class NoticeBoard {
                 scrollContent.style.setProperty('--scroll-duration', `${duration}s`);
                 scrollContent.style.animation = `scroll-csv-smooth ${duration}s linear infinite`;
                 
+                // Initialize hover/touch behavior
+                this.initializeScrollInteractions(container);
+                
                 // Force reflow to ensure animation starts
                 scrollContent.offsetHeight;
+            }
+        });
+    }
+    
+    // Initialize hover and touch interactions for scrolling
+    initializeScrollInteractions(container) {
+        const scrollContent = container.querySelector('.csv-scroll-content');
+        if (!scrollContent) return;
+        
+        let hoverTimeout;
+        let isManualScrolling = false;
+        let startY = 0;
+        let scrollTop = 0;
+        
+        // Mouse events
+        container.addEventListener('mouseenter', () => {
+            if (!isManualScrolling) {
+                scrollContent.style.animationPlayState = 'paused';
+                // Auto-resume after 3 seconds
+                hoverTimeout = setTimeout(() => {
+                    if (!isManualScrolling) {
+                        scrollContent.style.animationPlayState = 'running';
+                    }
+                }, 3000);
+            }
+        });
+        
+        container.addEventListener('mouseleave', () => {
+            if (hoverTimeout) {
+                clearTimeout(hoverTimeout);
+            }
+            if (!isManualScrolling) {
+                scrollContent.style.animationPlayState = 'running';
+            }
+        });
+        
+        // Touch events for mobile
+        container.addEventListener('touchstart', (e) => {
+            if (scrollContent.classList.contains('manual-scroll')) {
+                startY = e.touches[0].clientY;
+                scrollTop = scrollContent.scrollTop || 0;
+                isManualScrolling = true;
+                scrollContent.style.animationPlayState = 'paused';
+            }
+        });
+        
+        container.addEventListener('touchmove', (e) => {
+            if (scrollContent.classList.contains('manual-scroll') && isManualScrolling) {
+                e.preventDefault();
+                const currentY = e.touches[0].clientY;
+                const deltaY = startY - currentY;
+                const newScrollTop = scrollTop + deltaY;
+                
+                // Manual scroll simulation
+                scrollContent.style.transform = `translateY(${-newScrollTop}px)`;
+            }
+        });
+        
+        container.addEventListener('touchend', () => {
+            if (scrollContent.classList.contains('manual-scroll')) {
+                setTimeout(() => {
+                    isManualScrolling = false;
+                    if (!container.matches(':hover')) {
+                        scrollContent.style.animationPlayState = 'running';
+                    }
+                }, 1000);
             }
         });
     }

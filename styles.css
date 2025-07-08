@@ -1455,9 +1455,35 @@ body {
   }
 }
 
-/* Pause animation on hover for better UX */
+/* Pause animation on hover for better UX - with auto-resume after 3 seconds */
 .csv-data-container:hover .csv-scroll-content {
   animation-play-state: paused;
+}
+
+/* Touch device support */
+@media (hover: none) {
+  .csv-data-container .csv-scroll-content {
+    animation-play-state: running !important;
+  }
+}
+
+/* Enhanced scrolling animations */
+.csv-scroll-content {
+  animation-play-state: running;
+  transition: animation-play-state 0.3s ease;
+}
+
+.csv-scroll-content.paused {
+  animation-play-state: paused;
+}
+
+.csv-scroll-content.manual-scroll {
+  animation-play-state: paused;
+  cursor: grab;
+}
+
+.csv-scroll-content.manual-scroll:active {
+  cursor: grabbing;
 }
 
 /* Loading state for CSV data */
@@ -1596,6 +1622,13 @@ body {
 @media (max-width: 768px) {
   .csv-table-wrapper {
     height: 160px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  
+  .csv-table {
+    min-width: 100%;
+    width: max-content;
   }
   
   .csv-tbody {
@@ -1606,25 +1639,49 @@ body {
   .csv-cell {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
+    white-space: nowrap;
+    min-width: 80px;
   }
   
   .csv-row {
     height: 28px;
   }
   
+  /* Dynamic column widths for mobile */
   .csv-cell:nth-child(1),
   .csv-header:nth-child(1) {
-    width: 12%;
+    min-width: 60px;
+    width: auto;
   }
   
   .csv-cell:nth-child(2),
   .csv-header:nth-child(2) {
-    width: 58%;
+    min-width: 150px;
+    width: auto;
   }
   
   .csv-cell:nth-child(3),
   .csv-header:nth-child(3) {
-    width: 30%;
+    min-width: 100px;
+    width: auto;
+  }
+  
+  .csv-cell:nth-child(4),
+  .csv-header:nth-child(4) {
+    min-width: 120px;
+    width: auto;
+  }
+  
+  .csv-cell:nth-child(5),
+  .csv-header:nth-child(5) {
+    min-width: 100px;
+    width: auto;
+  }
+  
+  .csv-cell:nth-child(n+6),
+  .csv-header:nth-child(n+6) {
+    min-width: 100px;
+    width: auto;
   }
   
   .csv-controls {
@@ -1643,6 +1700,13 @@ body {
 @media (max-width: 480px) {
   .csv-table-wrapper {
     height: 140px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  
+  .csv-table {
+    min-width: 100%;
+    width: max-content;
   }
   
   .csv-tbody {
@@ -1653,6 +1717,8 @@ body {
   .csv-cell {
     padding: 4px 8px;
     font-size: 10px;
+    white-space: nowrap;
+    min-width: 70px;
   }
   
   .csv-row {
