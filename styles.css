@@ -1720,7 +1720,7 @@ body {
   }
   
   .csv-table {
-    min-width: 110%;
+    min-width: 120%;
     width: max-content;
     table-layout: fixed;
   }
@@ -1734,43 +1734,45 @@ body {
     padding: var(--spacing-xs) var(--spacing-sm);
     font-size: var(--font-size-xs);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible;
+    text-overflow: clip;
   }
   
   .csv-row {
     height: 28px;
   }
   
-  /* Mobile: Show maximum 4 columns with optimized widths */
+  /* Mobile: Show maximum 3 columns with optimized widths for full visibility */
   .csv-cell:nth-child(1),
   .csv-header:nth-child(1) {
-    width: 12%;
-    min-width: 50px;
+    width: 15%;
+    min-width: 60px;
   }
   
   .csv-cell:nth-child(2),
   .csv-header:nth-child(2) {
-    width: 40%;
-    min-width: 120px;
+    width: 50%;
+    min-width: 140px;
   }
   
   .csv-cell:nth-child(3),
   .csv-header:nth-child(3) {
-    width: 25%;
-    min-width: 80px;
+    width: 35%;
+    min-width: 100px;
   }
   
-  .csv-cell:nth-child(4),
-  .csv-header:nth-child(4) {
-    width: 23%;
-    min-width: 75px;
-  }
-  
-  /* Hide columns beyond 4th on mobile */
-  .csv-cell:nth-child(n+5),
-  .csv-header:nth-child(n+5) {
+  /* Hide columns beyond 3rd on mobile for better visibility */
+  .csv-cell:nth-child(n+4),
+  .csv-header:nth-child(n+4) {
     display: none;
+  }
+  
+  /* Special styling for amount column (3rd column) on mobile */
+  .csv-cell:nth-child(3) {
+    text-align: right;
+    font-weight: 600;
+    color: var(--primary-color);
+    padding-right: var(--spacing-md);
   }
   
   .csv-controls {
@@ -1787,7 +1789,7 @@ body {
   
   /* Show column indicator for mobile */
   .csv-data-container::after {
-    content: "Showing 4 columns on mobile";
+    content: "Showing 3 columns on mobile";
     position: absolute;
     bottom: 8px;
     right: 12px;
