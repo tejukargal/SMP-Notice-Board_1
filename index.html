@@ -254,6 +254,20 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="scrollingEnabled">
+                        <input type="checkbox" id="scrollingEnabled" style="margin-right: 8px;">
+                        Enable Scrolling Messages
+                    </label>
+                    <small class="form-help">Enable to display scrolling data from CSV files (e.g., 1.csv for Message 01)</small>
+                </div>
+
+                <div class="form-group scrolling-options" id="scrollingOptions" style="display: none;">
+                    <label for="scrollingLabel">Scrolling Message Label</label>
+                    <input type="text" id="scrollingLabel" placeholder="e.g., Fee Dues, Results, Announcements" maxlength="50">
+                    <small class="form-help">Label to display above the scrolling messages</small>
+                </div>
+
+                <div class="form-group">
                     <label for="noticeContent">Content *</label>
                     <div id="noticeContent" class="quill-editor"></div>
                 </div>
