@@ -131,11 +131,11 @@ class NoticeBoard {
             
             if (i === 0) {
                 // Header line - make it bold/uppercase
-                formattedLines.push(values.join(' | ').toUpperCase());
-                formattedLines.push('─'.repeat(values.join(' | ').length)); // Separator line
+                formattedLines.push(values.join('|').toUpperCase());
+                formattedLines.push('─'.repeat(values.join('|').length)); // Separator line
             } else {
                 // Data lines - use same pipe format as header
-                formattedLines.push(values.join(' | '));
+                formattedLines.push(values.join('|'));
             }
         }
         
@@ -175,8 +175,10 @@ class NoticeBoard {
         return `
             <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalLines}">
                 <div class="scrolling-label">
-                    <i class="fas fa-list"></i>
-                    ${this.escapeHtml(label)}
+                    <div>
+                        <i class="fas fa-list"></i>
+                        ${this.escapeHtml(label)}
+                    </div>
                     <span class="scrolling-count">(${totalLines - 2} records)</span>
                 </div>
                 <hr class="scrolling-separator">
@@ -2290,7 +2292,7 @@ class NoticeBoard {
                     const isAmount = /(?:rs\.?|₹|\$|fee|amount|due|paid|balance)/i.test(header) || 
                                    /(?:rs\.?\s*\d|₹\s*\d|\d+\.?\d*\s*(?:rs|₹))/i.test(sanitizedValue);
                     return isAmount ? `<span class="csv-amount">${sanitizedValue}</span>` : sanitizedValue;
-                }).join('<span class="csv-pipe-separator"> | </span>');
+                }).join('<span class="csv-pipe-separator">|</span>');
                 return `<div class="csv-mobile-row" data-row="${index}">${rowValues}</div>`;
             };
 
@@ -2323,8 +2325,10 @@ class NoticeBoard {
             return `
                 <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalRows}">
                     <div class="scrolling-label">
-                        <i class="fas fa-list"></i>
-                        ${this.escapeHtml(label)}
+                        <div>
+                            <i class="fas fa-list"></i>
+                            ${this.escapeHtml(label)}
+                        </div>
                         <span class="scrolling-count">(${totalRows} records)</span>
                     </div>
                     <hr class="scrolling-separator">
