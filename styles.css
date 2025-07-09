@@ -1203,7 +1203,7 @@ body {
 .scrolling-content {
   height: 320px;
   width: 100%;
-  max-width: 900px;
+  max-width: 1200px;
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.5);
@@ -1267,6 +1267,44 @@ body {
 
 [data-theme="dark"] .scrolling-label {
   border-bottom-color: rgba(100, 116, 139, 0.3);
+}
+
+/* Responsive width adjustments for scrolling message window */
+@media (max-width: 480px) {
+  .scrolling-content,
+  .scrolling-content-area {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  
+  .scrolling-message {
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-sm);
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .scrolling-content,
+  .scrolling-content-area {
+    max-width: 95%;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .scrolling-content,
+  .scrolling-content-area {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1025px) {
+  .scrolling-content,
+  .scrolling-content-area {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
 }
 
 /* Enhanced CSV Data Display - Improved Table Implementation */
@@ -1870,7 +1908,7 @@ table.csv-table,
 .scrolling-content-area {
   height: 250px;
   width: 100%;
-  max-width: 900px;
+  max-width: 1200px;
   overflow: hidden;
   position: relative;
   background: var(--surface-color);
