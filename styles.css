@@ -1445,8 +1445,9 @@ body {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: var(--surface-color);
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--font-size-sm);
   line-height: 1.5;
   margin-bottom: 1px;
@@ -1884,10 +1885,7 @@ table.csv-table,
 
 .scrolling-count {
   font-size: var(--font-size-xs);
-  background: var(--primary-color);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
+  color: var(--text-muted);
   font-weight: 500;
 }
 

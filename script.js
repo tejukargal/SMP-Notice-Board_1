@@ -176,7 +176,6 @@ class NoticeBoard {
             <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalLines}">
                 <div class="scrolling-label">
                     <div>
-                        <i class="fas fa-list"></i>
                         ${this.escapeHtml(label)}
                     </div>
                     <span class="scrolling-count">(${totalLines - 2} records)</span>
@@ -2326,7 +2325,6 @@ class NoticeBoard {
                 <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalRows}">
                     <div class="scrolling-label">
                         <div>
-                            <i class="fas fa-list"></i>
                             ${this.escapeHtml(label)}
                         </div>
                         <span class="scrolling-count">(${totalRows} records)</span>
