@@ -1201,7 +1201,9 @@ body {
 }
 
 .scrolling-content {
-  height: 200px;
+  height: 320px;
+  width: 100%;
+  max-width: 900px;
   overflow: hidden;
   position: relative;
   background: rgba(255, 255, 255, 0.5);
@@ -1213,7 +1215,7 @@ body {
   animation: scroll-vertical-smooth 80s linear infinite;
   font-family: 'Courier New', monospace;
   font-size: var(--font-size-sm);
-  line-height: 1.8;
+  line-height: 2.2;
   white-space: pre;
   padding: var(--spacing-sm);
   will-change: transform;
@@ -1221,9 +1223,10 @@ body {
 }
 
 .scroll-line {
-  padding: 4px 0;
+  padding: 8px 0;
   color: var(--text-primary);
   transition: opacity 0.3s ease;
+  margin-bottom: var(--spacing-xs);
 }
 
 .scroll-line:first-child {
@@ -1865,7 +1868,9 @@ table.csv-table,
 }
 
 .scrolling-content-area {
-  height: 120px;
+  height: 250px;
+  width: 100%;
+  max-width: 900px;
   overflow: hidden;
   position: relative;
   background: var(--surface-color);
