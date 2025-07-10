@@ -1294,7 +1294,7 @@ body {
   .scrolling-content-area {
     max-width: 100%;
     width: 100%;
-    margin: 0 auto;
+    margin: 0;
   }
   
   .scrolling-message {
@@ -1329,7 +1329,7 @@ body {
   .scrolling-content-area {
     max-width: 100%;
     width: 100%;
-    margin: 0 auto;
+    margin: 0;
   }
   
   /* Tablet optimizations for column-based format */
@@ -1346,7 +1346,7 @@ body {
   .scrolling-content,
   .scrolling-content-area {
     max-width: 100%;
-    margin: 0 auto;
+    margin: 0;
   }
 }
 
@@ -1354,7 +1354,7 @@ body {
   .scrolling-content,
   .scrolling-content-area {
     max-width: 1200px;
-    margin: 0 auto;
+    margin: 0;
   }
   
   /* Desktop optimizations for column-based format */
@@ -2004,6 +2004,10 @@ table.csv-table,
   font-size: var(--font-size-sm);
   line-height: 1.6;
   box-sizing: border-box;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .scrolling-animation {
@@ -2017,6 +2021,9 @@ table.csv-table,
   left: 0;
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .scrolling-controls {
