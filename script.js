@@ -92,9 +92,10 @@ class NoticeBoard {
             try {
                 const csvText = await this.fetchCSVFile(i);
                 if (csvText) {
-                    const parsedData = this.parseCSVToText(csvText);
-                    this.csvData[i] = parsedData;
-                    console.log(`Loaded CSV file ${i}.csv with ${parsedData.split('\n').length} lines`);
+                    // Store raw CSV text instead of parsed format for better processing
+                    this.csvData[i] = csvText;
+                    const lineCount = csvText.trim().split('\n').length;
+                    console.log(`Loaded CSV file ${i}.csv with ${lineCount} lines`);
                 }
             } catch (error) {
                 // File doesn't exist or error loading, skip silently
@@ -118,29 +119,6 @@ class NoticeBoard {
         }
     }
 
-    // Parse CSV to formatted text
-    parseCSVToText(csvText) {
-        const lines = csvText.trim().split('\n').filter(line => line.trim());
-        if (lines.length === 0) return '';
-
-        const formattedLines = [];
-        
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            const values = line.split(',').map(value => value.trim().replace(/^"|"$/g, ''));
-            
-            if (i === 0) {
-                // Header line - make it bold/uppercase
-                formattedLines.push(values.join('|').toUpperCase());
-                formattedLines.push('─'.repeat(values.join('|').length)); // Separator line
-            } else {
-                // Data lines - use same pipe format as header
-                formattedLines.push(values.join('|'));
-            }
-        }
-        
-        return formattedLines.join('\n');
-    }
 
     // Create simple scrolling text HTML
     // Get scroll speed multiplier based on setting
@@ -155,42 +133,83 @@ class NoticeBoard {
     }
 
     createScrollingTextHTML(csvText, label, speed = 'medium') {
-        const lines = csvText.split('\n');
-        const totalLines = lines.length;
-        
-        // Create line elements for pipe-separated format
-        const lineElements = lines.map(line => `<div class="csv-mobile-row">${line}</div>`).join('');
-        
-        // Duplicate content for seamless loop
-        const duplicatedContent = lineElements + lineElements;
-        
-        // Calculate animation duration based on content length and speed setting
-        const baseSpeed = this.getScrollSpeed(speed);
-        const animationDuration = Math.max(totalLines * baseSpeed, 15); // Minimum 15 seconds
-        
-        // Generate unique ID for this scrolling instance
-        const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Create new inline scrolling format - UPDATED: 2025-07-08-23:00
-        return `
-            <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalLines}">
-                <div class="scrolling-label">
-                    <div>
-                        ${this.escapeHtml(label)}
+        try {
+            // Parse CSV text properly instead of using pipe-separated format
+            const lines = csvText.trim().split('\n').filter(line => line.trim());
+            if (lines.length < 2) {
+                return this.createEmptyScrollingMessage(label);
+            }
+
+            // Parse headers and data rows
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+            const dataRows = lines.slice(1).map(line => {
+                const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] || '';
+                });
+                return row;
+            });
+
+            // Create sanitized data structure
+            const sanitizedData = {
+                headers: headers,
+                rows: dataRows
+            };
+
+            // Create mobile column-based format
+            const createMobileRowHTML = (row, index) => {
+                const rowCells = sanitizedData.headers.map((header, colIndex) => {
+                    const cellValue = this.formatCellValue(row[header] || '', header, colIndex);
+                    const sanitizedValue = this.escapeHtml(cellValue);
+                    // Check if value looks like an amount (contains rupees, numbers, or typical amount patterns)
+                    const isAmount = /(?:rs\.?|₹|\$|fee|amount|due|paid|balance|total|sum)/i.test(header) || 
+                                   /(?:rs\.?\s*\d|₹\s*\d|\d+\.?\d*\s*(?:rs|₹)|\d+\.\d+)/i.test(sanitizedValue);
+                    const isNumeric = /^\d+\.?\d*$/.test(sanitizedValue) || isAmount;
+                    const cellClass = isNumeric ? 'csv-cell-numeric' : 'csv-cell-text';
+                    return `<div class="csv-column ${cellClass}" data-column="${colIndex}" title="${sanitizedValue}">${sanitizedValue}</div>`;
+                }).join('');
+                return `<div class="csv-mobile-row" data-row="${index}">${rowCells}</div>`;
+            };
+
+            // Create original rows with enhanced indexing
+            const originalMobileRowsHTML = sanitizedData.rows.map((row, index) => createMobileRowHTML(row, index)).join('');
+            const duplicatedMobileRowsHTML = sanitizedData.rows.map((row, index) => 
+                createMobileRowHTML(row, index + sanitizedData.rows.length)
+            ).join('');
+            const allMobileRowsHTML = originalMobileRowsHTML + duplicatedMobileRowsHTML;
+
+            // Enhanced timing calculation with adaptive speed
+            const totalRows = sanitizedData.rows.length;
+            const baseSpeed = this.calculateOptimalScrollSpeed ? this.calculateOptimalScrollSpeed(totalRows) : this.getScrollSpeed(speed);
+            const animationDuration = Math.max(totalRows * baseSpeed, 15); // Minimum 15 seconds
+            
+            // Generate unique ID for this scrolling instance
+            const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            return `
+                <div class="scrolling-message-inline" id="${instanceId}" data-rows="${totalRows}">
+                    <div class="scrolling-label">
+                        <div>
+                            ${this.escapeHtml(label)}
+                        </div>
+                        <span class="scrolling-count">(${totalRows} records)</span>
                     </div>
-                    <span class="scrolling-count">(${totalLines - 2} records)</span>
-                </div>
-                <hr class="scrolling-separator">
-                <div class="scrolling-content-area">
-                    <div class="scrolling-animation"
-                         style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalLines};"
-                         data-animation-duration="${animationDuration}"
-                         data-total-rows="${totalLines}">
-                        ${duplicatedContent}
+                    <hr class="scrolling-separator">
+                    <div class="scrolling-content-area">
+                        <div class="scrolling-animation"
+                             style="--scroll-duration: ${animationDuration}s; --total-rows: ${totalRows};"
+                             data-animation-duration="${animationDuration}"
+                             data-total-rows="${totalRows}">
+                            ${allMobileRowsHTML}
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
+            `;
+        } catch (error) {
+            console.error('Error creating scrolling message HTML:', error);
+            return this.createErrorScrollingMessage(label, error.message);
+        }
     }
 
     initializeElements() {
@@ -2282,17 +2301,19 @@ class NoticeBoard {
                 return `<tr class="csv-row" data-row="${index}" style="display: none !important;">${cellsHTML}</tr>`;
             };
 
-            // Create mobile pipe-separated format
+            // Create mobile column-based format
             const createMobileRowHTML = (row, index) => {
-                const rowValues = sanitizedData.headers.map((header, colIndex) => {
+                const rowCells = sanitizedData.headers.map((header, colIndex) => {
                     const cellValue = this.formatCellValue(row[header] || '', header, colIndex);
                     const sanitizedValue = this.escapeHtml(cellValue);
                     // Check if value looks like an amount (contains rupees, numbers, or typical amount patterns)
-                    const isAmount = /(?:rs\.?|₹|\$|fee|amount|due|paid|balance)/i.test(header) || 
-                                   /(?:rs\.?\s*\d|₹\s*\d|\d+\.?\d*\s*(?:rs|₹))/i.test(sanitizedValue);
-                    return isAmount ? `<span class="csv-amount">${sanitizedValue}</span>` : sanitizedValue;
-                }).join('<span class="csv-pipe-separator">|</span>');
-                return `<div class="csv-mobile-row" data-row="${index}">${rowValues}</div>`;
+                    const isAmount = /(?:rs\.?|₹|\$|fee|amount|due|paid|balance|total|sum)/i.test(header) || 
+                                   /(?:rs\.?\s*\d|₹\s*\d|\d+\.?\d*\s*(?:rs|₹)|\d+\.\d+)/i.test(sanitizedValue);
+                    const isNumeric = /^\d+\.?\d*$/.test(sanitizedValue) || isAmount;
+                    const cellClass = isNumeric ? 'csv-cell-numeric' : 'csv-cell-text';
+                    return `<div class="csv-column ${cellClass}" data-column="${colIndex}" title="${sanitizedValue}">${sanitizedValue}</div>`;
+                }).join('');
+                return `<div class="csv-mobile-row" data-row="${index}">${rowCells}</div>`;
             };
 
             // Create original rows with enhanced indexing
