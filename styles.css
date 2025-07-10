@@ -1310,27 +1310,27 @@ body {
   
   .csv-column {
     padding: 0 2px;
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) - 0.5px);
   }
   
   .csv-column:first-child {
     min-width: 30px;
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) - 0.5px);
   }
   
   .csv-column:nth-child(2) {
     flex: 2.5;
-    font-size: var(--font-size-sm);
+    font-size: calc(var(--font-size-sm) - 1px);
   }
   
   .csv-column:nth-child(3) {
     flex: 0.8;
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) - 0.5px);
   }
   
   .csv-column:last-child {
     min-width: 70px;
-    font-size: var(--font-size-xs);
+    font-size: calc(var(--font-size-xs) - 0.5px);
   }
 }
 
@@ -1531,8 +1531,9 @@ body {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   background: var(--surface-color);
-  font-size: var(--font-size-sm);
+  font-size: calc(var(--font-size-sm) - 1px);
   line-height: 1.4;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   min-height: auto;
   margin-bottom: 1px;
   width: 100%;
@@ -2043,9 +2044,9 @@ table.csv-table,
   background: var(--surface-color);
   border-radius: var(--radius-sm);
   padding: var(--spacing-sm);
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-  font-size: var(--font-size-sm);
-  line-height: 1.6;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-size: calc(var(--font-size-sm) - 1px);
+  line-height: 1.5;
   box-sizing: border-box;
   text-align: left;
   display: flex;
