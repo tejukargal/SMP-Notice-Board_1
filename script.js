@@ -3395,7 +3395,54 @@ class NoticeBoard {
         this.editResponseBtn?.addEventListener('click', () => this.editResponse());
         this.deleteResponseBtn?.addEventListener('click', () => this.deleteResponse());
 
+        // Initialize forms cloud sync
+        this.initializeFormsCloudSync();
+
         console.log('📋 SMP Forms system initialized');
+    }
+
+    // Initialize forms cloud synchronization
+    async initializeFormsCloudSync() {
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            console.log('Forms cloud sync not configured');
+            return;
+        }
+
+        try {
+            // Load forms from cloud
+            const cloudForms = await this.getFormsFromJSONhost();
+            if (cloudForms && cloudForms.length > 0) {
+                // Merge with local forms
+                const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+                const mergedForms = this.mergeForms(localForms, cloudForms);
+                
+                // Save merged forms locally
+                localStorage.setItem('smp-forms', JSON.stringify(mergedForms));
+                console.log(`📋 Forms synced from cloud: ${mergedForms.length} forms`);
+            }
+        } catch (error) {
+            console.error('Error syncing forms from cloud:', error);
+        }
+    }
+
+    // Merge local and cloud forms, preferring newer versions
+    mergeForms(localForms, cloudForms) {
+        const merged = new Map();
+
+        // Add all local forms first
+        localForms.forEach(form => {
+            merged.set(form.id, form);
+        });
+
+        // Add or update with cloud forms if they're newer
+        cloudForms.forEach(cloudForm => {
+            const localForm = merged.get(cloudForm.id);
+            if (!localForm || new Date(cloudForm.lastModified || cloudForm.timestamp) > new Date(localForm.lastModified || localForm.timestamp)) {
+                merged.set(cloudForm.id, cloudForm);
+            }
+        });
+
+        return Array.from(merged.values());
     }
 
     openFormsModal() {
@@ -3910,12 +3957,12 @@ class NoticeBoard {
                 existingForms.push(formData);
             }
 
-            // Save back to JSONhost
+            // Save back to JSONhost using correct API format
             const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
-                method: 'PUT',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${window.CLOUD_CONFIG.jsonhost.apiToken}`
+                    'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
                 },
                 body: JSON.stringify({
                     forms: existingForms,
@@ -3973,12 +4020,12 @@ class NoticeBoard {
                     data: responseData
                 });
 
-                // Save updated forms data
+                // Save updated forms data using correct API format
                 const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
-                    method: 'PUT',
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${window.CLOUD_CONFIG.jsonhost.apiToken}`
+                        'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
                     },
                     body: JSON.stringify({
                         forms: formsData,
@@ -4044,7 +4091,7 @@ class NoticeBoard {
     // Create form content with navigation for longer forms
     createFormContentWithNavigation(form, formId) {
         const questions = form.questions || [];
-        const hasNavigation = questions.length > 5; // Show navigation for forms with more than 5 questions
+        const hasNavigation = questions.length > 3; // Show navigation for forms with more than 3 questions
 
         if (!hasNavigation) {
             // Simple form layout for shorter forms
