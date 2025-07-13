@@ -274,6 +274,20 @@
                         <option value="speed">Speed</option>
                     </select>
                     <small class="form-help">Control the scrolling speed for better readability</small>
+                    
+                    <label for="popupEnabled">
+                        <input type="checkbox" id="popupEnabled" checked>
+                        <span>Enable Popup Window</span>
+                    </label>
+                    <small class="form-help">Allow users to click scrolling messages to view data in popup window</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="formCaptureEnabled">
+                        <input type="checkbox" id="formCaptureEnabled">
+                        <span>Enable Data Capture Form</span>
+                    </label>
+                    <small class="form-help">Add a data capture form to this notice for student submissions</small>
                 </div>
 
                 <div class="form-group">
@@ -283,6 +297,10 @@
 
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="cancelNotice">Cancel</button>
+                    <button type="button" class="btn btn-info admin-only" id="dataCaptureBtn" style="display: none;" title="Create Data Capture Form">
+                        <i class="fas fa-poll"></i>
+                        Data Capture
+                    </button>
                     <button type="submit" class="btn btn-primary" id="saveNotice">Save Notice</button>
                 </div>
             </form>
@@ -381,6 +399,164 @@
             <div class="modal-body">
                 <div class="scrolling-data-container" id="scrollingDataContainer">
                     <!-- Scrolling data content will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SMP Forms Modal -->
+    <div class="modal" id="formsModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="formsModalTitle">SMP Forms - Data Capture</h2>
+                <div class="modal-actions">
+                    <button class="btn btn-icon" id="previewFormBtn" title="Preview Form" style="display: none;">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-icon" id="publishFormBtn" title="Publish Form" style="display: none;">
+                        <i class="fas fa-share"></i>
+                    </button>
+                    <button class="modal-close" id="closeFormsModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="forms-container">
+                    <!-- Form Builder Section -->
+                    <div class="form-builder-section" id="formBuilderSection">
+                        <div class="form-builder-header">
+                            <div class="form-group">
+                                <label for="formTitle">Form Title *</label>
+                                <input type="text" id="formTitle" placeholder="e.g., Student Information Form" maxlength="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="formDescription">Description</label>
+                                <textarea id="formDescription" placeholder="Brief description of the form purpose" maxlength="500"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="formEnabled">
+                                    <input type="checkbox" id="formEnabled" checked>
+                                    <span>Enable Form for Students</span>
+                                </label>
+                                <small class="form-help">Allow students to submit responses</small>
+                            </div>
+                        </div>
+
+                        <!-- Question Builder -->
+                        <div class="question-builder">
+                            <h3>Questions</h3>
+                            <div class="questions-container" id="questionsContainer">
+                                <!-- Questions will be added here -->
+                            </div>
+                            
+                            <div class="add-question-section">
+                                <button type="button" class="btn btn-secondary" id="addQuestionBtn">
+                                    <i class="fas fa-plus"></i>
+                                    Add Question
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelFormBuilder">Cancel</button>
+                            <button type="button" class="btn btn-info admin-only" id="exportFormDataBtn" style="display: none;" title="Export Form Responses">
+                                <i class="fas fa-download"></i>
+                                Export Data
+                            </button>
+                            <button type="button" class="btn btn-success admin-only" id="manageFormDataBtn" style="display: none;" title="Manage Form Responses">
+                                <i class="fas fa-table"></i>
+                                Manage Data
+                            </button>
+                            <button type="button" class="btn btn-success" id="saveFormBtn">
+                                <i class="fas fa-save"></i>
+                                Save Form
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Form Preview Section (Hidden by default) -->
+                    <div class="form-preview-section" id="formPreviewSection" style="display: none;">
+                        <div class="preview-header">
+                            <h3>Form Preview</h3>
+                            <button type="button" class="btn btn-secondary" id="backToBuilderBtn">
+                                <i class="fas fa-edit"></i>
+                                Back to Builder
+                            </button>
+                        </div>
+                        <div class="form-preview-content" id="formPreviewContent">
+                            <!-- Preview content will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Data Management Modal -->
+    <div class="modal" id="formDataModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="formDataTitle">Form Data Management</h2>
+                <div class="modal-actions">
+                    <button class="btn btn-icon" id="refreshFormDataBtn" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="modal-close" id="closeFormDataModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="form-data-container">
+                    <div class="form-data-header">
+                        <div class="form-data-stats" id="formDataStats">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Responses:</span>
+                                <span class="stat-value" id="totalResponses">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Form:</span>
+                                <span class="stat-value" id="currentFormName">-</span>
+                            </div>
+                        </div>
+                        <div class="form-data-actions">
+                            <input type="text" id="searchResponses" placeholder="Search responses..." class="search-input">
+                            <button class="btn btn-secondary" id="selectAllBtn">Select All</button>
+                            <button class="btn btn-danger" id="deleteSelectedBtn" style="display: none;">
+                                <i class="fas fa-trash"></i> Delete Selected
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-data-table-container" id="formDataTableContainer">
+                        <div class="loading-message">Loading responses...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Detail Modal -->
+    <div class="modal" id="responseDetailModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="responseDetailTitle">Response Details</h2>
+                <div class="modal-actions">
+                    <button class="btn btn-icon admin-only" id="editResponseBtn" title="Edit Response" style="display: none;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-icon admin-only" id="deleteResponseBtn" title="Delete Response" style="display: none;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button class="modal-close" id="closeResponseDetailModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="response-detail-container" id="responseDetailContainer">
+                    <!-- Response details will be populated here -->
                 </div>
             </div>
         </div>

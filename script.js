@@ -36,6 +36,7 @@ class NoticeBoard {
         this.checkAdminStatus();
         this.initializeCloudSync();
         // this.initializeFileHosting(); // Disabled - using local compression instead
+        this.initializeFormsSystem(); // Initialize SMP Forms system
         this.applyTheme();
         
         // Load all CSV files at startup
@@ -74,6 +75,7 @@ class NoticeBoard {
             scrollingEnabled: true,
             scrollingLabel: 'Student Fee Dues List',
             scrollingSpeed: 'medium',
+            popupEnabled: true,
             order: 1
         };
         
@@ -125,9 +127,9 @@ class NoticeBoard {
     getScrollSpeed(speedSetting = 'medium') {
         const speeds = {
             'slow': 2.0,     // Slow and readable
-            'medium': 1.2,   // Optimal for reading
-            'fast': 0.7,     // Fast pace for long lists
-            'speed': 0.3     // Very fast scrolling for very long lists
+            'medium': 1.5,   // Optimal for reading
+            'fast': 1.0,     // Faster pace for long lists
+            'speed': 0.8 // Very fast scrolling for very long lists
         };
         return speeds[speedSetting] || speeds['medium'];
     }
@@ -182,7 +184,9 @@ class NoticeBoard {
             // Enhanced timing calculation with adaptive speed
             const totalRows = sanitizedData.rows.length;
             const baseSpeed = this.calculateOptimalScrollSpeed ? this.calculateOptimalScrollSpeed(totalRows) : this.getScrollSpeed(speed);
-            const animationDuration = Math.max(totalRows * baseSpeed, 15); // Minimum 15 seconds
+            // Reduce minimum duration for faster scrolling, especially for Fast and Speed options
+            const minDuration = speed === 'speed' ? 3 : (speed === 'fast' ? 5 : 10);
+            const animationDuration = Math.max(totalRows * baseSpeed, minDuration);
             
             // Generate unique ID for this scrolling instance
             const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -248,6 +252,8 @@ class NoticeBoard {
         this.scrollingEnabled = document.getElementById('scrollingEnabled');
         this.scrollingLabel = document.getElementById('scrollingLabel');
         this.scrollingSpeed = document.getElementById('scrollingSpeed');
+        this.popupEnabled = document.getElementById('popupEnabled');
+        this.formCaptureEnabled = document.getElementById('formCaptureEnabled');
         this.scrollingOptions = document.getElementById('scrollingOptions');
 
         // Admin elements
@@ -1297,6 +1303,8 @@ class NoticeBoard {
     toggleTheme() {
         const currentTheme = document.documentElement.getAttribute('data-theme');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        // Apply new theme with built-in smooth transitions
         document.documentElement.setAttribute('data-theme', newTheme);
         localStorage.setItem('darkMode', newTheme === 'dark');
         this.themeToggle.innerHTML = newTheme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
@@ -1446,17 +1454,40 @@ class NoticeBoard {
                     }
                 }
                 
-                // Add scrolling content click listener
+                // Add scrolling content click listener only if popup is enabled
                 const scrollingContent = card.querySelector('.scrolling-message-inline');
-                if (scrollingContent) {
+                if (scrollingContent && notice.popupEnabled !== false) {
                     scrollingContent.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this.showScrollingDataModal(notice);
                     });
                     scrollingContent.style.cursor = 'pointer';
                     scrollingContent.classList.add('scrolling-data-clickable');
+                } else if (scrollingContent) {
+                    // Reset cursor and classes if popup is disabled
+                    scrollingContent.style.cursor = 'default';
+                    scrollingContent.classList.remove('scrolling-data-clickable');
                 }
             }
+        });
+
+        // Add form submission event listeners
+        const noticeForms = document.querySelectorAll('.notice-form');
+        noticeForms.forEach(form => {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleFormSubmission(form);
+            });
+        });
+
+        // Add form toggle event listeners
+        const toggleFormBtns = document.querySelectorAll('.toggle-form-btn');
+        toggleFormBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleFormVisibility(btn.dataset.formId);
+            });
         });
     }
 
@@ -1520,6 +1551,12 @@ class NoticeBoard {
             }
         }
 
+        // Add form capture content if enabled
+        let formHTML = '';
+        if (notice.formCaptureEnabled && notice.formId) {
+            formHTML = this.createFormHTML(notice.formId);
+        }
+
         return `
             <div class="notice-card priority-${notice.priority}-card" data-notice-id="${notice.id}">
                 <div class="notice-card-header ${priorityClass} ${orderClass}">
@@ -1559,6 +1596,7 @@ class NoticeBoard {
                         ${processedContent}
                     </div>
                     ${scrollingHTML}
+                    ${formHTML}
                     ${attachmentsHTML}
                     ${tagsHTML ? `
                         <div class="notice-tags">${tagsHTML}</div>
@@ -1756,7 +1794,23 @@ class NoticeBoard {
         this.scrollingEnabled.checked = notice.scrollingEnabled || false;
         this.scrollingLabel.value = notice.scrollingLabel || '';
         this.scrollingSpeed.value = notice.scrollingSpeed || 'medium';
+        this.popupEnabled.checked = notice.popupEnabled !== false; // Default to true
+        this.formCaptureEnabled.checked = notice.formCaptureEnabled || false;
         this.scrollingOptions.style.display = notice.scrollingEnabled ? 'block' : 'none';
+        
+        // Update Data Capture button text based on whether form exists
+        if (this.dataCaptureBtn) {
+            if (notice.formId) {
+                this.dataCaptureBtn.innerHTML = '<i class="fas fa-edit"></i> Update Form';
+                this.dataCaptureBtn.title = 'Update Data Capture Form';
+                // Set the current editing form ID
+                this.currentEditingFormId = notice.formId;
+            } else {
+                this.dataCaptureBtn.innerHTML = '<i class="fas fa-poll"></i> Data Capture';
+                this.dataCaptureBtn.title = 'Create Data Capture Form';
+                this.currentEditingFormId = null;
+            }
+        }
         
         // Set order
         const orderSelect = document.getElementById('noticeOrder');
@@ -1780,9 +1834,20 @@ class NoticeBoard {
         this.scrollingEnabled.checked = false;
         this.scrollingLabel.value = '';
         this.scrollingSpeed.value = 'medium';
+        this.popupEnabled.checked = true; // Default to enabled
+        this.formCaptureEnabled.checked = false; // Default to disabled
         this.scrollingOptions.style.display = 'none';
         this.renderTagsDisplay();
         this.renderAttachmentsPreview();
+        
+        // Reset Data Capture button text
+        if (this.dataCaptureBtn) {
+            this.dataCaptureBtn.innerHTML = '<i class="fas fa-poll"></i> Data Capture';
+            this.dataCaptureBtn.title = 'Create Data Capture Form';
+        }
+        
+        // Reset form editing session
+        this.currentEditingFormId = null;
     }
 
     handleFormSubmit(e) {
@@ -1850,6 +1915,9 @@ class NoticeBoard {
             scrollingEnabled: this.scrollingEnabled.checked,
             scrollingLabel: this.scrollingLabel.value.trim() || null,
             scrollingSpeed: this.scrollingSpeed.value || 'medium',
+            popupEnabled: this.popupEnabled.checked,
+            formCaptureEnabled: this.formCaptureEnabled.checked,
+            formId: this.formCaptureEnabled.checked ? (this.currentForm?.id || this.currentEditingFormId) : null,
             order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
@@ -2481,7 +2549,7 @@ class NoticeBoard {
             // Enhanced timing calculation with adaptive speed
             const totalRows = sanitizedData.rows.length;
             const baseSpeed = this.calculateOptimalScrollSpeed(totalRows);
-            const animationDuration = Math.max(totalRows * baseSpeed, 15); // Minimum 15 seconds
+            const animationDuration = Math.max(totalRows * baseSpeed, 5); // Minimum 5 seconds for faster scrolling
             
             // Generate unique ID for this scrolling instance
             const instanceId = `csv-scroll-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -2594,10 +2662,10 @@ class NoticeBoard {
 
     // Helper method to calculate optimal scroll speed
     calculateOptimalScrollSpeed(rowCount) {
-        if (rowCount <= 10) return 3.0;  // Slower for fewer rows
-        if (rowCount <= 50) return 2.5;
-        if (rowCount <= 100) return 2.0;
-        return 1.5; // Faster for many rows
+        if (rowCount <= 10) return 1.5;  // Faster for fewer rows
+        if (rowCount <= 50) return 1.0;
+        if (rowCount <= 100) return 0.7;
+        return 0.4; // Much faster for many rows
     }
 
     // Helper method to escape HTML
@@ -3253,6 +3321,1607 @@ class NoticeBoard {
             console.error('Direct test error:', error);
             this.showToast(`JSONhost test error: ${error.message}`, 'error');
         }
+    }
+
+    // ==========================================
+    // SMP FORMS - DATA CAPTURE FUNCTIONALITY
+    // ==========================================
+
+    initializeFormsSystem() {
+        // Forms system elements
+        this.formsModal = document.getElementById('formsModal');
+        this.dataCaptureBtn = document.getElementById('dataCaptureBtn');
+        this.closeFormsModal = document.getElementById('closeFormsModal');
+        this.formTitle = document.getElementById('formTitle');
+        this.formDescription = document.getElementById('formDescription');
+        this.formEnabled = document.getElementById('formEnabled');
+        this.questionsContainer = document.getElementById('questionsContainer');
+        this.addQuestionBtn = document.getElementById('addQuestionBtn');
+        this.saveFormBtn = document.getElementById('saveFormBtn');
+        this.cancelFormBuilder = document.getElementById('cancelFormBuilder');
+        this.previewFormBtn = document.getElementById('previewFormBtn');
+        this.publishFormBtn = document.getElementById('publishFormBtn');
+        this.formBuilderSection = document.getElementById('formBuilderSection');
+        this.formPreviewSection = document.getElementById('formPreviewSection');
+        this.backToBuilderBtn = document.getElementById('backToBuilderBtn');
+        this.exportFormDataBtn = document.getElementById('exportFormDataBtn');
+        this.manageFormDataBtn = document.getElementById('manageFormDataBtn');
+
+        // Form data management modal elements
+        this.formDataModal = document.getElementById('formDataModal');
+        this.closeFormDataModal = document.getElementById('closeFormDataModal');
+        this.refreshFormDataBtn = document.getElementById('refreshFormDataBtn');
+        this.formDataTableContainer = document.getElementById('formDataTableContainer');
+        this.searchResponses = document.getElementById('searchResponses');
+        this.selectAllBtn = document.getElementById('selectAllBtn');
+        this.deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        this.totalResponses = document.getElementById('totalResponses');
+        this.currentFormName = document.getElementById('currentFormName');
+
+        // Response detail modal elements
+        this.responseDetailModal = document.getElementById('responseDetailModal');
+        this.closeResponseDetailModal = document.getElementById('closeResponseDetailModal');
+        this.editResponseBtn = document.getElementById('editResponseBtn');
+        this.deleteResponseBtn = document.getElementById('deleteResponseBtn');
+        this.responseDetailContainer = document.getElementById('responseDetailContainer');
+
+        // Current form data
+        this.currentForm = null;
+        this.formQuestions = [];
+        this.questionIdCounter = 0;
+        this.currentEditingFormId = null; // Track form for current notice editing session
+
+        // Attach event listeners
+        this.dataCaptureBtn?.addEventListener('click', () => this.openFormsModal());
+        this.closeFormsModal?.addEventListener('click', () => this.closeFormsModalHandler());
+        this.addQuestionBtn?.addEventListener('click', () => this.addNewQuestion());
+        this.saveFormBtn?.addEventListener('click', () => this.saveForm());
+        this.cancelFormBuilder?.addEventListener('click', () => this.closeFormsModalHandler());
+        this.previewFormBtn?.addEventListener('click', () => this.previewForm());
+        this.backToBuilderBtn?.addEventListener('click', () => this.backToBuilder());
+        this.publishFormBtn?.addEventListener('click', () => this.publishForm());
+        this.exportFormDataBtn?.addEventListener('click', () => this.showFormExportOptions());
+        this.manageFormDataBtn?.addEventListener('click', () => this.openFormDataManagement());
+
+        // Form data management modal events
+        this.closeFormDataModal?.addEventListener('click', () => this.closeFormDataManagement());
+        this.refreshFormDataBtn?.addEventListener('click', () => this.refreshFormData());
+        this.searchResponses?.addEventListener('input', (e) => this.searchFormResponses(e.target.value));
+        this.selectAllBtn?.addEventListener('click', () => this.toggleSelectAll());
+        this.deleteSelectedBtn?.addEventListener('click', () => this.deleteSelectedResponses());
+
+        // Response detail modal events
+        this.closeResponseDetailModal?.addEventListener('click', () => this.closeResponseDetail());
+        this.editResponseBtn?.addEventListener('click', () => this.editResponse());
+        this.deleteResponseBtn?.addEventListener('click', () => this.deleteResponse());
+
+        console.log('📋 SMP Forms system initialized');
+    }
+
+    openFormsModal() {
+        this.resetFormBuilder();
+        
+        // Check if we're editing a notice that has an existing form
+        if (this.currentEditingNotice && this.currentEditingNotice.formId) {
+            this.loadExistingForm(this.currentEditingNotice.formId);
+        }
+        
+        this.formsModal.classList.add('show');
+        this.showFormBuilder();
+    }
+
+    closeFormsModalHandler() {
+        this.formsModal.classList.remove('show');
+        this.resetFormBuilder();
+    }
+
+    resetFormBuilder() {
+        this.formTitle.value = '';
+        this.formDescription.value = '';
+        this.formEnabled.checked = true;
+        this.questionsContainer.innerHTML = '';
+        this.formQuestions = [];
+        this.questionIdCounter = 0;
+        this.currentForm = null;
+    }
+
+    loadExistingForm(formId) {
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const form = forms.find(f => f.id === formId);
+        
+        if (!form) {
+            this.showToast('Form not found', 'error');
+            return;
+        }
+        
+        // Populate form builder with existing data
+        this.formTitle.value = form.title;
+        this.formDescription.value = form.description || '';
+        this.formEnabled.checked = form.enabled;
+        this.currentForm = form;
+        
+        // Load existing questions
+        this.formQuestions = [...form.questions];
+        this.questionIdCounter = Math.max(...form.questions.map(q => q.id), 0);
+        
+        // Render all questions
+        this.questionsContainer.innerHTML = '';
+        this.formQuestions.forEach(question => {
+            this.renderQuestion(question);
+        });
+        
+        // Show export and manage buttons if there are responses and user is admin
+        if (this.isAdmin && form.responses && form.responses.length > 0) {
+            this.exportFormDataBtn.style.display = 'inline-block';
+            this.manageFormDataBtn.style.display = 'inline-block';
+        } else {
+            this.exportFormDataBtn.style.display = 'none';
+            this.manageFormDataBtn.style.display = 'none';
+        }
+        
+        console.log('Loaded existing form for editing:', form.title);
+    }
+
+    showFormBuilder() {
+        this.formBuilderSection.style.display = 'block';
+        this.formPreviewSection.style.display = 'none';
+        this.previewFormBtn.style.display = 'inline-block';
+        this.publishFormBtn.style.display = 'none';
+    }
+
+    showFormPreview() {
+        this.formBuilderSection.style.display = 'none';
+        this.formPreviewSection.style.display = 'block';
+        this.previewFormBtn.style.display = 'none';
+        this.publishFormBtn.style.display = 'inline-block';
+    }
+
+    backToBuilder() {
+        this.showFormBuilder();
+    }
+
+    addNewQuestion() {
+        const questionId = ++this.questionIdCounter;
+        const questionData = {
+            id: questionId,
+            type: 'text',
+            question: '',
+            required: false,
+            options: []
+        };
+        
+        this.formQuestions.push(questionData);
+        this.renderQuestion(questionData);
+    }
+
+    renderQuestion(questionData) {
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'question-item';
+        questionDiv.dataset.questionId = questionData.id;
+
+        questionDiv.innerHTML = `
+            <div class="question-header">
+                <span class="question-number">Question ${questionData.id}</span>
+                <div class="question-controls">
+                    <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionUp(${questionData.id})" title="Move Up">
+                        <i class="fas fa-arrow-up"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionDown(${questionData.id})" title="Move Down">
+                        <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="noticeBoard.removeQuestion(${questionData.id})" title="Delete Question">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="question-content">
+                <div class="question-type-selector">
+                    <label>
+                        <input type="radio" name="type_${questionData.id}" value="text" ${questionData.type === 'text' ? 'checked' : ''}>
+                        <span>Short Text</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="type_${questionData.id}" value="textarea" ${questionData.type === 'textarea' ? 'checked' : ''}>
+                        <span>Long Text</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="type_${questionData.id}" value="radio" ${questionData.type === 'radio' ? 'checked' : ''}>
+                        <span>Multiple Choice</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="type_${questionData.id}" value="checkbox" ${questionData.type === 'checkbox' ? 'checked' : ''}>
+                        <span>Checkboxes</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="type_${questionData.id}" value="select" ${questionData.type === 'select' ? 'checked' : ''}>
+                        <span>Dropdown</span>
+                    </label>
+                </div>
+                
+                <input type="text" class="question-input" placeholder="Enter your question here..." value="${questionData.question}">
+                
+                <label>
+                    <input type="checkbox" ${questionData.required ? 'checked' : ''}>
+                    <span>Required</span>
+                </label>
+                
+                <div class="question-options" style="display: ${['radio', 'checkbox', 'select'].includes(questionData.type) ? 'block' : 'none'};">
+                    <label>Options:</label>
+                    <div class="options-list" id="options_${questionData.id}">
+                        ${this.renderQuestionOptions(questionData)}
+                    </div>
+                    <button type="button" class="add-option-btn" onclick="noticeBoard.addOption(${questionData.id})">
+                        <i class="fas fa-plus"></i> Add Option
+                    </button>
+                </div>
+            </div>
+        `;
+
+        this.questionsContainer.appendChild(questionDiv);
+        this.attachQuestionEventListeners(questionData.id);
+    }
+
+    renderQuestionOptions(questionData) {
+        if (questionData.options.length === 0) {
+            questionData.options = ['Option 1', 'Option 2'];
+        }
+        
+        return questionData.options.map((option, index) => `
+            <div class="option-item">
+                <input type="text" class="option-input" value="${option}" placeholder="Option ${index + 1}">
+                <button type="button" class="remove-option-btn" onclick="noticeBoard.removeOption(${questionData.id}, ${index})" ${questionData.options.length <= 2 ? 'disabled' : ''}>
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+    }
+
+    attachQuestionEventListeners(questionId) {
+        const questionDiv = document.querySelector(`[data-question-id="${questionId}"]`);
+        if (!questionDiv) return;
+
+        // Type change handler
+        const typeRadios = questionDiv.querySelectorAll('input[type="radio"]');
+        typeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    this.updateQuestionType(questionId, radio.value);
+                }
+            });
+        });
+
+        // Question text change handler
+        const questionInput = questionDiv.querySelector('.question-input');
+        questionInput.addEventListener('input', () => {
+            this.updateQuestionText(questionId, questionInput.value);
+        });
+
+        // Required checkbox handler
+        const requiredCheckbox = questionDiv.querySelector('input[type="checkbox"]');
+        requiredCheckbox.addEventListener('change', () => {
+            this.updateQuestionRequired(questionId, requiredCheckbox.checked);
+        });
+
+        // Option input handlers
+        this.attachOptionEventListeners(questionId);
+    }
+
+    attachOptionEventListeners(questionId) {
+        const optionInputs = document.querySelectorAll(`#options_${questionId} .option-input`);
+        optionInputs.forEach((input, index) => {
+            input.addEventListener('input', () => {
+                this.updateOption(questionId, index, input.value);
+            });
+        });
+    }
+
+    updateQuestionType(questionId, type) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question) {
+            question.type = type;
+            const optionsDiv = document.querySelector(`[data-question-id="${questionId}"] .question-options`);
+            if (optionsDiv) {
+                optionsDiv.style.display = ['radio', 'checkbox', 'select'].includes(type) ? 'block' : 'none';
+            }
+        }
+    }
+
+    updateQuestionText(questionId, text) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question) {
+            question.question = text;
+        }
+    }
+
+    updateQuestionRequired(questionId, required) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question) {
+            question.required = required;
+        }
+    }
+
+    addOption(questionId) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question) {
+            question.options.push(`Option ${question.options.length + 1}`);
+            const optionsList = document.getElementById(`options_${questionId}`);
+            optionsList.innerHTML = this.renderQuestionOptions(question);
+            this.attachOptionEventListeners(questionId);
+        }
+    }
+
+    removeOption(questionId, index) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question && question.options.length > 2) {
+            question.options.splice(index, 1);
+            const optionsList = document.getElementById(`options_${questionId}`);
+            optionsList.innerHTML = this.renderQuestionOptions(question);
+            this.attachOptionEventListeners(questionId);
+        }
+    }
+
+    updateOption(questionId, index, value) {
+        const question = this.formQuestions.find(q => q.id === questionId);
+        if (question && question.options[index] !== undefined) {
+            question.options[index] = value;
+        }
+    }
+
+    removeQuestion(questionId) {
+        this.formQuestions = this.formQuestions.filter(q => q.id !== questionId);
+        const questionDiv = document.querySelector(`[data-question-id="${questionId}"]`);
+        if (questionDiv) {
+            questionDiv.remove();
+        }
+        this.updateQuestionNumbers();
+    }
+
+    moveQuestionUp(questionId) {
+        const index = this.formQuestions.findIndex(q => q.id === questionId);
+        if (index > 0) {
+            [this.formQuestions[index], this.formQuestions[index - 1]] = [this.formQuestions[index - 1], this.formQuestions[index]];
+            this.reRenderQuestions();
+        }
+    }
+
+    moveQuestionDown(questionId) {
+        const index = this.formQuestions.findIndex(q => q.id === questionId);
+        if (index < this.formQuestions.length - 1) {
+            [this.formQuestions[index], this.formQuestions[index + 1]] = [this.formQuestions[index + 1], this.formQuestions[index]];
+            this.reRenderQuestions();
+        }
+    }
+
+    reRenderQuestions() {
+        this.questionsContainer.innerHTML = '';
+        this.formQuestions.forEach(question => {
+            this.renderQuestion(question);
+        });
+    }
+
+    updateQuestionNumbers() {
+        const questionDivs = this.questionsContainer.querySelectorAll('.question-item');
+        questionDivs.forEach((div, index) => {
+            const numberSpan = div.querySelector('.question-number');
+            if (numberSpan) {
+                numberSpan.textContent = `Question ${index + 1}`;
+            }
+        });
+    }
+
+    previewForm() {
+        if (!this.validateFormBuilder()) return;
+        
+        this.generateFormPreview();
+        this.showFormPreview();
+    }
+
+    validateFormBuilder() {
+        if (!this.formTitle || !this.formTitle.value.trim()) {
+            this.showToast('Please enter a form title', 'error');
+            return false;
+        }
+        
+        if (this.formQuestions.length === 0) {
+            this.showToast('Please add at least one question', 'error');
+            return false;
+        }
+        
+        for (const question of this.formQuestions) {
+            if (!question.question.trim()) {
+                this.showToast('Please fill in all question texts', 'error');
+                return false;
+            }
+            
+            if (['radio', 'checkbox', 'select'].includes(question.type)) {
+                if (question.options.length < 2 || question.options.some(opt => !opt.trim())) {
+                    this.showToast('All choice questions must have at least 2 non-empty options', 'error');
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+
+    generateFormPreview() {
+        const previewContent = document.getElementById('formPreviewContent');
+        
+        let html = `
+            <div class="form-preview-header">
+                <h2>${this.escapeHtml(this.formTitle.value)}</h2>
+                ${this.formDescription.value ? `<p class="form-description">${this.escapeHtml(this.formDescription.value)}</p>` : ''}
+                <hr>
+            </div>
+            <form class="form-preview-form">
+        `;
+        
+        this.formQuestions.forEach((question, index) => {
+            html += this.generateQuestionPreview(question, index + 1);
+        });
+        
+        html += `
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Submit Response</button>
+                </div>
+            </form>
+        `;
+        
+        previewContent.innerHTML = html;
+    }
+
+    generateQuestionPreview(question, number) {
+        const required = question.required ? ' *' : '';
+        let inputHtml = '';
+        
+        switch (question.type) {
+            case 'text':
+                inputHtml = `<input type="text" class="form-control" placeholder="Your answer..." ${question.required ? 'required' : ''}>`;
+                break;
+            case 'textarea':
+                inputHtml = `<textarea class="form-control" rows="3" placeholder="Your answer..." ${question.required ? 'required' : ''}></textarea>`;
+                break;
+            case 'radio':
+                inputHtml = question.options.map((option, i) => `
+                    <label class="radio-option">
+                        <input type="radio" name="question_${question.id}" value="${this.escapeHtml(option)}" ${question.required ? 'required' : ''}>
+                        <span>${this.escapeHtml(option)}</span>
+                    </label>
+                `).join('');
+                break;
+            case 'checkbox':
+                inputHtml = question.options.map((option, i) => `
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="question_${question.id}[]" value="${this.escapeHtml(option)}">
+                        <span>${this.escapeHtml(option)}</span>
+                    </label>
+                `).join('');
+                break;
+            case 'select':
+                inputHtml = `
+                    <select class="form-control" ${question.required ? 'required' : ''}>
+                        <option value="">Choose an option...</option>
+                        ${question.options.map(option => `<option value="${this.escapeHtml(option)}">${this.escapeHtml(option)}</option>`).join('')}
+                    </select>
+                `;
+                break;
+        }
+        
+        return `
+            <div class="form-group preview-question">
+                <label class="question-label">
+                    ${number}. ${this.escapeHtml(question.question)}${required}
+                </label>
+                <div class="question-input-container">
+                    ${inputHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    saveForm() {
+        if (!this.validateFormBuilder()) return;
+        
+        // Check if we're editing an existing form or creating a new one
+        const isEditing = this.currentForm && this.currentForm.id;
+        
+        const formData = {
+            id: isEditing ? this.currentForm.id : Date.now().toString(),
+            title: this.formTitle.value.trim(),
+            description: this.formDescription.value.trim(),
+            enabled: this.formEnabled.checked,
+            questions: this.formQuestions.map(q => ({...q})),
+            created: isEditing ? this.currentForm.created : new Date().toISOString(),
+            lastModified: new Date().toISOString(),
+            responses: isEditing ? this.currentForm.responses || [] : []
+        };
+        
+        this.currentForm = formData;
+        
+        // Save to both localStorage and JSONhost
+        this.saveFormToStorage(formData);
+        this.saveFormToJSONhost(formData);
+        
+        // Enable form capture for current notice if we're editing one
+        if (this.formCaptureEnabled) {
+            this.formCaptureEnabled.checked = true;
+        }
+        
+        // Auto-enable form capture when creating/editing a form
+        if (this.currentEditingNotice) {
+            // We're editing an existing notice - update it with the form
+            this.formCaptureEnabled.checked = true;
+        }
+        
+        // Store form ID for current editing session
+        this.currentEditingFormId = formData.id;
+        
+        const action = isEditing ? 'updated' : 'created';
+        this.showToast(`Form ${action} successfully! You can now enable it in the notice.`, 'success');
+        this.closeFormsModalHandler();
+    }
+
+    saveFormToStorage(formData) {
+        const existingForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const existingIndex = existingForms.findIndex(f => f.id === formData.id);
+        
+        if (existingIndex !== -1) {
+            existingForms[existingIndex] = formData;
+        } else {
+            existingForms.push(formData);
+        }
+        
+        localStorage.setItem('smp-forms', JSON.stringify(existingForms));
+    }
+
+    publishForm() {
+        if (!this.currentForm) {
+            this.showToast('Please save the form first', 'error');
+            return;
+        }
+        
+        // Generate form URL and copy to clipboard
+        const formUrl = `${window.location.origin}${window.location.pathname}?form=${this.currentForm.id}`;
+        
+        navigator.clipboard.writeText(formUrl).then(() => {
+            this.showToast('Form URL copied to clipboard!', 'success');
+        }).catch(() => {
+            this.showToast('Form published. URL: ' + formUrl, 'info');
+        });
+    }
+
+    // JSONhost integration for forms
+    async saveFormToJSONhost(formData) {
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            console.log('JSONhost not configured for forms');
+            return;
+        }
+
+        try {
+            // Get existing forms data
+            const existingForms = await this.getFormsFromJSONhost() || [];
+            
+            // Update or add form
+            const existingIndex = existingForms.findIndex(f => f.id === formData.id);
+            if (existingIndex !== -1) {
+                existingForms[existingIndex] = formData;
+            } else {
+                existingForms.push(formData);
+            }
+
+            // Save back to JSONhost
+            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${window.CLOUD_CONFIG.jsonhost.apiToken}`
+                },
+                body: JSON.stringify({
+                    forms: existingForms,
+                    lastUpdated: new Date().toISOString()
+                })
+            });
+
+            if (response.ok) {
+                console.log('Form saved to JSONhost successfully');
+            } else {
+                console.error('Failed to save form to JSONhost:', response.status);
+            }
+        } catch (error) {
+            console.error('Error saving form to JSONhost:', error);
+        }
+    }
+
+    async getFormsFromJSONhost() {
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            return null;
+        }
+
+        try {
+            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+            if (response.ok) {
+                const data = await response.json();
+                return data.forms || [];
+            }
+        } catch (error) {
+            console.error('Error loading forms from JSONhost:', error);
+        }
+        return null;
+    }
+
+    async saveFormResponseToJSONhost(formId, responseData) {
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            console.log('JSONhost not configured for form responses');
+            return;
+        }
+
+        try {
+            // Get current forms data
+            const formsData = await this.getFormsFromJSONhost() || [];
+            const form = formsData.find(f => f.id === formId);
+            
+            if (form) {
+                if (!form.responses) {
+                    form.responses = [];
+                }
+                
+                // Add new response
+                form.responses.push({
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    data: responseData
+                });
+
+                // Save updated forms data
+                const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${window.CLOUD_CONFIG.jsonhost.apiToken}`
+                    },
+                    body: JSON.stringify({
+                        forms: formsData,
+                        lastUpdated: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('Form response saved to JSONhost successfully');
+                    return true;
+                } else {
+                    console.error('Failed to save form response to JSONhost:', response.status);
+                    return false;
+                }
+            }
+        } catch (error) {
+            console.error('Error saving form response to JSONhost:', error);
+            return false;
+        }
+    }
+
+    // Create form HTML for display in notice cards
+    createFormHTML(formId) {
+        if (!formId) return '';
+        
+        // Get form data from localStorage
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const form = forms.find(f => f.id === formId);
+        
+        if (!form) return '';
+        
+        // Show disabled forms to admins, hide from regular users
+        if (!form.enabled && !this.isAdmin) return '';
+        
+        const isDisabled = !form.enabled;
+        
+        return `
+            <div class="notice-form-container ${isDisabled ? 'form-disabled' : ''}">
+                <div class="form-header">
+                    <div class="form-title-section">
+                        <h4 class="form-title">
+                            <i class="fas fa-poll"></i>
+                            ${form.title}
+                            ${isDisabled ? '<span class="form-status-badge">Disabled</span>' : ''}
+                        </h4>
+                        ${this.isAdmin ? `
+                            <div class="form-admin-controls">
+                                <button type="button" class="btn btn-sm btn-secondary toggle-form-btn" data-form-id="${formId}" title="Toggle Form Visibility">
+                                    <i class="fas fa-eye${form.enabled ? '' : '-slash'}"></i>
+                                    ${form.enabled ? 'Disable' : 'Enable'}
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${form.description ? `<p class="form-description">${form.description}</p>` : ''}
+                    ${isDisabled && this.isAdmin ? '<p class="form-disabled-message"><i class="fas fa-info-circle"></i> This form is disabled and not visible to students.</p>' : ''}
+                </div>
+                ${!isDisabled ? this.createFormContentWithNavigation(form, formId) : ''}
+            </div>
+        `;
+    }
+
+    // Create form content with navigation for longer forms
+    createFormContentWithNavigation(form, formId) {
+        const questions = form.questions || [];
+        const hasNavigation = questions.length > 5; // Show navigation for forms with more than 5 questions
+
+        if (!hasNavigation) {
+            // Simple form layout for shorter forms
+            return `
+                <form class="notice-form" data-form-id="${formId}">
+                    ${questions.map(question => this.createQuestionHTML(question)).join('')}
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary submit-form-btn">
+                            <i class="fas fa-paper-plane"></i>
+                            Submit Response
+                        </button>
+                    </div>
+                </form>
+            `;
+        }
+
+        // Complex form layout with navigation
+        const navigationHTML = this.createFormNavigation(questions);
+        const sectionsHTML = this.createFormSections(questions);
+
+        return `
+            <div class="form-content-with-nav">
+                <div class="form-vertical-nav">
+                    ${navigationHTML}
+                </div>
+                <div class="form-main-content">
+                    <form class="notice-form" data-form-id="${formId}">
+                        ${sectionsHTML}
+                        <div class="form-actions" id="form-actions">
+                            <button type="submit" class="btn btn-primary submit-form-btn">
+                                <i class="fas fa-paper-plane"></i>
+                                Submit Response
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    // Create navigation for form sections
+    createFormNavigation(questions) {
+        const sections = this.groupQuestionsIntoSections(questions);
+        
+        let navHTML = `
+            <div class="nav-section">
+                <div class="nav-title">Form Sections</div>
+        `;
+
+        sections.forEach((section, index) => {
+            navHTML += `
+                <div class="nav-item" data-section-id="section-${index}" onclick="window.noticeBoard.scrollToFormSection('section-${index}')">
+                    ${section.title}
+                    <small>(${section.questions.length} questions)</small>
+                </div>
+            `;
+        });
+
+        navHTML += `
+            </div>
+            <div class="nav-section">
+                <div class="nav-title">Quick Jump</div>
+                <div class="nav-item" onclick="window.noticeBoard.scrollToFormSection('form-actions')">
+                    <i class="fas fa-paper-plane"></i>
+                    Submit Form
+                </div>
+            </div>
+        `;
+
+        return navHTML;
+    }
+
+    // Group questions into logical sections
+    groupQuestionsIntoSections(questions) {
+        const sections = [];
+        const questionsPerSection = 3;
+
+        for (let i = 0; i < questions.length; i += questionsPerSection) {
+            const sectionQuestions = questions.slice(i, i + questionsPerSection);
+            const sectionTitle = `Questions ${i + 1}-${Math.min(i + questionsPerSection, questions.length)}`;
+            
+            sections.push({
+                title: sectionTitle,
+                questions: sectionQuestions,
+                startIndex: i
+            });
+        }
+
+        return sections;
+    }
+
+    // Create form sections with questions
+    createFormSections(questions) {
+        const sections = this.groupQuestionsIntoSections(questions);
+        
+        let sectionsHTML = '';
+        
+        sections.forEach((section, sectionIndex) => {
+            sectionsHTML += `
+                <div class="form-section" id="section-${sectionIndex}">
+                    <div class="section-header">
+                        <h5 class="section-title">${section.title}</h5>
+                        <div class="section-progress">
+                            Section ${sectionIndex + 1} of ${sections.length}
+                        </div>
+                    </div>
+                    <div class="section-questions">
+                        ${section.questions.map(question => this.createQuestionHTML(question)).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        return sectionsHTML;
+    }
+
+    // Scroll to specific form section
+    scrollToFormSection(sectionId) {
+        const element = document.getElementById(sectionId) || document.querySelector(`.${sectionId}`);
+        if (element) {
+            element.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start',
+                inline: 'nearest'
+            });
+
+            // Update active navigation item
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const navItem = document.querySelector(`[data-section-id="${sectionId}"]`);
+            if (navItem) {
+                navItem.classList.add('active');
+            }
+        }
+    }
+
+    // Create HTML for individual form questions
+    createQuestionHTML(question) {
+        const requiredMark = question.required ? '<span class="required">*</span>' : '';
+        
+        switch (question.type) {
+            case 'text':
+                return `
+                    <div class="form-question">
+                        <label class="question-label">
+                            ${question.question}${requiredMark}
+                        </label>
+                        <input type="text" name="question_${question.id}" ${question.required ? 'required' : ''} class="form-input">
+                    </div>
+                `;
+                
+            case 'textarea':
+                return `
+                    <div class="form-question">
+                        <label class="question-label">
+                            ${question.question}${requiredMark}
+                        </label>
+                        <textarea name="question_${question.id}" ${question.required ? 'required' : ''} class="form-textarea" rows="3"></textarea>
+                    </div>
+                `;
+                
+            case 'radio':
+                return `
+                    <div class="form-question">
+                        <label class="question-label">
+                            ${question.question}${requiredMark}
+                        </label>
+                        <div class="radio-group">
+                            ${question.options.map((option, index) => `
+                                <label class="radio-option">
+                                    <input type="radio" name="question_${question.id}" value="${option}" ${question.required ? 'required' : ''}>
+                                    <span>${option}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+            case 'checkbox':
+                return `
+                    <div class="form-question">
+                        <label class="question-label">
+                            ${question.question}${requiredMark}
+                        </label>
+                        <div class="checkbox-group">
+                            ${question.options.map((option, index) => `
+                                <label class="checkbox-option">
+                                    <input type="checkbox" name="question_${question.id}[]" value="${option}">
+                                    <span>${option}</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                
+            case 'select':
+                return `
+                    <div class="form-question">
+                        <label class="question-label">
+                            ${question.question}${requiredMark}
+                        </label>
+                        <select name="question_${question.id}" ${question.required ? 'required' : ''} class="form-select">
+                            <option value="">Select an option</option>
+                            ${question.options.map(option => `
+                                <option value="${option}">${option}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `;
+                
+            default:
+                return '';
+        }
+    }
+
+    // Handle form submission with duplicate validation
+    async handleFormSubmission(formElement) {
+        const formId = formElement.dataset.formId;
+        if (!formId) return;
+
+        // Get form data
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const form = forms.find(f => f.id === formId);
+        if (!form) {
+            this.showToast('Form not found', 'error');
+            return;
+        }
+
+        // Collect form responses
+        const responses = {};
+        const formData = new FormData(formElement);
+        
+        form.questions.forEach(question => {
+            const fieldName = `question_${question.id}`;
+            
+            if (question.type === 'checkbox') {
+                const checkboxValues = formData.getAll(`${fieldName}[]`);
+                responses[question.id] = {
+                    question: question.question,
+                    type: question.type,
+                    answer: checkboxValues
+                };
+            } else {
+                const value = formData.get(fieldName);
+                responses[question.id] = {
+                    question: question.question,
+                    type: question.type,
+                    answer: value || ''
+                };
+            }
+        });
+
+        // Validate required fields
+        const missingFields = [];
+        form.questions.forEach(question => {
+            if (question.required) {
+                const response = responses[question.id];
+                if (!response.answer || 
+                    (Array.isArray(response.answer) && response.answer.length === 0) ||
+                    (typeof response.answer === 'string' && response.answer.trim() === '')) {
+                    missingFields.push(question.question);
+                }
+            }
+        });
+
+        if (missingFields.length > 0) {
+            this.showToast(`Please fill in all required fields: ${missingFields.join(', ')}`, 'error');
+            return;
+        }
+
+        // Check for duplicate submissions
+        if (this.isDuplicateSubmission(form, responses)) {
+            this.showToast('This response has already been submitted. Duplicate entries are not allowed.', 'warning');
+            return;
+        }
+
+        // Create response object
+        const responseData = {
+            id: Date.now().toString(),
+            formId: formId,
+            responses: responses,
+            submittedAt: new Date().toISOString(),
+            userAgent: navigator.userAgent.substring(0, 100) // For basic identification
+        };
+
+        // Save response locally and to cloud
+        this.saveFormResponse(form, responseData);
+        
+        // Show success message and reset form
+        this.showToast('Response submitted successfully!', 'success');
+        formElement.reset();
+    }
+
+    // Check if this is a duplicate submission
+    isDuplicateSubmission(form, newResponses) {
+        // Get existing responses for this form
+        const existingResponses = form.responses || [];
+        
+        // Compare new responses with existing ones
+        for (const existingResponse of existingResponses) {
+            let isIdentical = true;
+            
+            // Compare each question's answer
+            for (const questionId in newResponses) {
+                const newAnswer = newResponses[questionId].answer;
+                const existingAnswer = existingResponse.responses[questionId]?.answer;
+                
+                // Handle array comparison for checkboxes
+                if (Array.isArray(newAnswer) && Array.isArray(existingAnswer)) {
+                    if (newAnswer.length !== existingAnswer.length || 
+                        !newAnswer.every(val => existingAnswer.includes(val))) {
+                        isIdentical = false;
+                        break;
+                    }
+                } else if (newAnswer !== existingAnswer) {
+                    isIdentical = false;
+                    break;
+                }
+            }
+            
+            if (isIdentical) {
+                return true; // Found duplicate
+            }
+        }
+        
+        return false; // No duplicate found
+    }
+
+    // Save form response to storage and cloud
+    saveFormResponse(form, responseData) {
+        // Add response to form
+        if (!form.responses) {
+            form.responses = [];
+        }
+        form.responses.push(responseData);
+        
+        // Update form in localStorage
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const formIndex = forms.findIndex(f => f.id === form.id);
+        if (formIndex !== -1) {
+            forms[formIndex] = form;
+            localStorage.setItem('smp-forms', JSON.stringify(forms));
+        }
+        
+        // Save to JSONhost
+        this.saveFormToJSONhost(form);
+        
+        console.log('Form response saved:', responseData);
+    }
+
+    // Show form export options
+    showFormExportOptions() {
+        if (!this.currentForm || !this.currentForm.responses || this.currentForm.responses.length === 0) {
+            this.showToast('No responses to export', 'warning');
+            return;
+        }
+
+        const exportOptions = [
+            { label: 'CSV Export', action: () => this.exportFormDataAsCSV(), icon: 'fas fa-file-csv' },
+            { label: 'PDF Export', action: () => this.exportFormDataAsPDF(), icon: 'fas fa-file-pdf' }
+        ];
+
+        // Create a simple menu instead of using the main export modal
+        const menu = document.createElement('div');
+        menu.className = 'export-menu';
+        menu.innerHTML = `
+            <div class="export-menu-content">
+                <h4>Export Form Responses</h4>
+                <p>Form: ${this.currentForm.title}</p>
+                <p>Total Responses: ${this.currentForm.responses.length}</p>
+                ${exportOptions.map(option => `
+                    <button class="export-option-btn" data-action="${option.label}">
+                        <i class="${option.icon}"></i>
+                        ${option.label}
+                    </button>
+                `).join('')}
+                <button class="export-option-btn cancel-export">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+            </div>
+        `;
+
+        // Add to body temporarily
+        document.body.appendChild(menu);
+
+        // Add event listeners
+        menu.querySelectorAll('.export-option-btn').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                if (btn.classList.contains('cancel-export')) {
+                    document.body.removeChild(menu);
+                } else {
+                    exportOptions[index].action();
+                    document.body.removeChild(menu);
+                }
+            });
+        });
+
+        // Click outside to close
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target)) {
+                    if (document.body.contains(menu)) {
+                        document.body.removeChild(menu);
+                    }
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 100);
+    }
+
+    // Export form data as CSV
+    exportFormDataAsCSV() {
+        if (!this.currentForm || !this.currentForm.responses) return;
+
+        const responses = this.currentForm.responses;
+        const questions = this.currentForm.questions;
+
+        // Create CSV header
+        const headers = ['Response ID', 'Submitted At'];
+        questions.forEach(q => headers.push(`Q${q.id}: ${q.question}`));
+
+        // Create CSV rows
+        const rows = [headers];
+        responses.forEach(response => {
+            const row = [response.id, new Date(response.submittedAt).toLocaleString()];
+            questions.forEach(q => {
+                const answer = response.responses[q.id]?.answer || '';
+                // Handle array answers (checkboxes)
+                const answerText = Array.isArray(answer) ? answer.join('; ') : answer;
+                row.push(answerText);
+            });
+            rows.push(row);
+        });
+
+        // Convert to CSV string
+        const csvContent = rows.map(row => 
+            row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        ).join('\n');
+
+        // Download CSV
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${this.currentForm.title}_responses.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        this.showToast('CSV exported successfully!', 'success');
+    }
+
+    // Export form data as PDF
+    exportFormDataAsPDF() {
+        if (!this.currentForm || !this.currentForm.responses) return;
+
+        const responses = this.currentForm.responses;
+        const questions = this.currentForm.questions;
+
+        // Create HTML content for PDF
+        let htmlContent = `
+            <html>
+            <head>
+                <title>${this.currentForm.title} - Responses</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h1 { color: #333; border-bottom: 2px solid #a8d5e2; padding-bottom: 10px; }
+                    .form-info { background: #f5f5f5; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+                    .response { border: 1px solid #ddd; margin-bottom: 20px; padding: 15px; border-radius: 5px; }
+                    .response-header { background: #a8d5e2; color: white; padding: 10px; margin: -15px -15px 15px -15px; border-radius: 5px 5px 0 0; }
+                    .question { margin-bottom: 10px; }
+                    .question-label { font-weight: bold; color: #555; }
+                    .answer { margin-left: 15px; color: #333; }
+                    @media print { body { margin: 0; } }
+                </style>
+            </head>
+            <body>
+                <h1>${this.currentForm.title} - Form Responses</h1>
+                <div class="form-info">
+                    <p><strong>Form Description:</strong> ${this.currentForm.description || 'No description'}</p>
+                    <p><strong>Total Responses:</strong> ${responses.length}</p>
+                    <p><strong>Export Date:</strong> ${new Date().toLocaleString()}</p>
+                </div>
+        `;
+
+        responses.forEach((response, index) => {
+            htmlContent += `
+                <div class="response">
+                    <div class="response-header">
+                        <strong>Response #${index + 1}</strong> - ${new Date(response.submittedAt).toLocaleString()}
+                    </div>
+            `;
+
+            questions.forEach(q => {
+                const answer = response.responses[q.id]?.answer || 'No answer';
+                const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
+                htmlContent += `
+                    <div class="question">
+                        <div class="question-label">${q.question}</div>
+                        <div class="answer">${answerText}</div>
+                    </div>
+                `;
+            });
+
+            htmlContent += '</div>';
+        });
+
+        htmlContent += '</body></html>';
+
+        // Create a new window for printing
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        
+        // Wait for content to load then print
+        printWindow.onload = function() {
+            printWindow.print();
+            // Close window after printing (optional)
+            printWindow.onafterprint = function() {
+                printWindow.close();
+            };
+        };
+
+        this.showToast('PDF export opened in new window. Please print or save as PDF.', 'info');
+    }
+
+    // Toggle form visibility (enable/disable)
+    toggleFormVisibility(formId) {
+        if (!formId) return;
+
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const form = forms.find(f => f.id === formId);
+        
+        if (!form) {
+            this.showToast('Form not found', 'error');
+            return;
+        }
+
+        // Toggle the enabled state
+        form.enabled = !form.enabled;
+        form.lastModified = new Date().toISOString();
+
+        // Update localStorage
+        const formIndex = forms.findIndex(f => f.id === formId);
+        if (formIndex !== -1) {
+            forms[formIndex] = form;
+            localStorage.setItem('smp-forms', JSON.stringify(forms));
+        }
+
+        // Update cloud storage
+        this.saveFormToJSONhost(form);
+
+        // Re-render notices to reflect changes
+        this.render();
+
+        const action = form.enabled ? 'enabled' : 'disabled';
+        this.showToast(`Form ${action} successfully`, 'success');
+    }
+
+    // Open form data management modal
+    openFormDataManagement() {
+        if (!this.currentForm || !this.currentForm.responses || this.currentForm.responses.length === 0) {
+            this.showToast('No responses to manage', 'warning');
+            return;
+        }
+
+        this.formDataModal.style.display = 'block';
+        this.currentFormName.textContent = this.currentForm.title;
+        this.totalResponses.textContent = this.currentForm.responses.length;
+        this.loadFormDataTable();
+    }
+
+    // Close form data management modal
+    closeFormDataManagement() {
+        this.formDataModal.style.display = 'none';
+        this.searchResponses.value = '';
+        this.clearResponseSelection();
+    }
+
+    // Load form data into table
+    loadFormDataTable() {
+        const responses = this.currentForm.responses || [];
+        
+        if (responses.length === 0) {
+            this.formDataTableContainer.innerHTML = `
+                <div class="empty-responses-message">
+                    <i class="fas fa-inbox"></i>
+                    <p>No responses found</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Get all unique questions from the first response or form structure
+        const sampleResponse = responses[0];
+        const questions = this.currentForm.questions || [];
+        
+        let tableHTML = `
+            <table class="form-data-table">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" id="selectAllCheckbox" class="response-checkbox">
+                        </th>
+                        <th>ID</th>
+                        <th>Submitted</th>
+                        <th>Preview</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        responses.forEach((response, index) => {
+            const submittedDate = new Date(response.submittedAt || response.timestamp).toLocaleString();
+            const firstAnswer = Object.values(response.responses || response.data || {})[0]?.answer || 'No data';
+            const preview = String(firstAnswer).length > 50 ? String(firstAnswer).substring(0, 50) + '...' : firstAnswer;
+
+            tableHTML += `
+                <tr data-response-id="${response.id}">
+                    <td>
+                        <input type="checkbox" class="response-checkbox" value="${response.id}">
+                    </td>
+                    <td>#${index + 1}</td>
+                    <td>
+                        <span class="response-timestamp">${submittedDate}</span>
+                    </td>
+                    <td>
+                        <span class="response-preview">${preview}</span>
+                    </td>
+                    <td>
+                        <div class="response-actions">
+                            <button class="response-action-btn" onclick="window.noticeBoard.viewResponseDetail('${response.id}')" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="response-action-btn" onclick="window.noticeBoard.deleteResponseById('${response.id}')" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tableHTML += `
+                </tbody>
+            </table>
+        `;
+
+        this.formDataTableContainer.innerHTML = tableHTML;
+
+        // Add event listeners for checkboxes
+        this.setupResponseTableEvents();
+    }
+
+    // Setup event listeners for response table
+    setupResponseTableEvents() {
+        // Select all checkbox
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', () => {
+                const checkboxes = document.querySelectorAll('.response-checkbox:not(#selectAllCheckbox)');
+                checkboxes.forEach(cb => cb.checked = selectAllCheckbox.checked);
+                this.updateDeleteButton();
+            });
+        }
+
+        // Individual checkboxes
+        const checkboxes = document.querySelectorAll('.response-checkbox:not(#selectAllCheckbox)');
+        checkboxes.forEach(cb => {
+            cb.addEventListener('change', () => this.updateDeleteButton());
+        });
+
+        // Row click to view details
+        const rows = document.querySelectorAll('.form-data-table tbody tr');
+        rows.forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.type !== 'checkbox' && !e.target.closest('.response-actions')) {
+                    const responseId = row.dataset.responseId;
+                    this.viewResponseDetail(responseId);
+                }
+            });
+        });
+    }
+
+    // Update delete button visibility
+    updateDeleteButton() {
+        const checkedBoxes = document.querySelectorAll('.response-checkbox:checked:not(#selectAllCheckbox)');
+        this.deleteSelectedBtn.style.display = checkedBoxes.length > 0 ? 'inline-block' : 'none';
+    }
+
+    // Search form responses
+    searchFormResponses(searchTerm) {
+        const rows = document.querySelectorAll('.form-data-table tbody tr');
+        const term = searchTerm.toLowerCase();
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(term) ? '' : 'none';
+        });
+    }
+
+    // Toggle select all
+    toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = !selectAllCheckbox.checked;
+            selectAllCheckbox.dispatchEvent(new Event('change'));
+        }
+    }
+
+    // Delete selected responses
+    deleteSelectedResponses() {
+        const checkedBoxes = document.querySelectorAll('.response-checkbox:checked:not(#selectAllCheckbox)');
+        const responseIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+        if (responseIds.length === 0) {
+            this.showToast('No responses selected', 'warning');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to delete ${responseIds.length} selected response(s)?`)) {
+            return;
+        }
+
+        // Remove responses from form
+        this.currentForm.responses = this.currentForm.responses.filter(
+            response => !responseIds.includes(response.id)
+        );
+
+        // Update storage
+        this.updateFormInStorage();
+        
+        // Refresh table
+        this.loadFormDataTable();
+        this.totalResponses.textContent = this.currentForm.responses.length;
+        
+        this.showToast(`${responseIds.length} response(s) deleted successfully`, 'success');
+    }
+
+    // View response detail
+    viewResponseDetail(responseId) {
+        const response = this.currentForm.responses.find(r => r.id === responseId);
+        if (!response) {
+            this.showToast('Response not found', 'error');
+            return;
+        }
+
+        this.currentViewingResponse = response;
+        this.responseDetailModal.style.display = 'block';
+        this.renderResponseDetail(response);
+
+        // Show admin buttons
+        if (this.isAdmin) {
+            this.editResponseBtn.style.display = 'inline-block';
+            this.deleteResponseBtn.style.display = 'inline-block';
+        }
+    }
+
+    // Render response detail content
+    renderResponseDetail(response) {
+        const submittedDate = new Date(response.submittedAt || response.timestamp).toLocaleString();
+        const responses = response.responses || response.data || {};
+        const questions = this.currentForm.questions || [];
+
+        let detailHTML = `
+            <div class="response-meta">
+                <div class="response-meta-grid">
+                    <div class="meta-item">
+                        <span class="meta-label">Response ID</span>
+                        <span class="meta-value">${response.id}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Submitted At</span>
+                        <span class="meta-value">${submittedDate}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Form</span>
+                        <span class="meta-value">${this.currentForm.title}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="response-answers">
+        `;
+
+        // Display all question-answer pairs
+        questions.forEach(question => {
+            const answer = responses[question.id]?.answer || 'No answer provided';
+            const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
+            
+            detailHTML += `
+                <div class="answer-item">
+                    <div class="answer-question">${question.question}</div>
+                    <div class="answer-value ${!answerText || answerText === 'No answer provided' ? 'empty' : ''}">${answerText}</div>
+                </div>
+            `;
+        });
+
+        detailHTML += '</div>';
+        this.responseDetailContainer.innerHTML = detailHTML;
+    }
+
+    // Close response detail modal
+    closeResponseDetail() {
+        this.responseDetailModal.style.display = 'none';
+        this.currentViewingResponse = null;
+    }
+
+    // Edit response (placeholder for future implementation)
+    editResponse() {
+        this.showToast('Edit response feature coming soon!', 'info');
+    }
+
+    // Delete single response
+    deleteResponse() {
+        if (!this.currentViewingResponse) return;
+
+        if (!confirm('Are you sure you want to delete this response?')) {
+            return;
+        }
+
+        this.deleteResponseById(this.currentViewingResponse.id);
+        this.closeResponseDetail();
+    }
+
+    // Delete response by ID
+    deleteResponseById(responseId) {
+        this.currentForm.responses = this.currentForm.responses.filter(r => r.id !== responseId);
+        this.updateFormInStorage();
+        
+        // Refresh data if management modal is open
+        if (this.formDataModal.style.display === 'block') {
+            this.loadFormDataTable();
+            this.totalResponses.textContent = this.currentForm.responses.length;
+        }
+        
+        this.showToast('Response deleted successfully', 'success');
+    }
+
+    // Update form in storage and cloud
+    updateFormInStorage() {
+        // Update localStorage
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const formIndex = forms.findIndex(f => f.id === this.currentForm.id);
+        if (formIndex !== -1) {
+            forms[formIndex] = this.currentForm;
+            localStorage.setItem('smp-forms', JSON.stringify(forms));
+        }
+
+        // Update cloud storage
+        this.saveFormToJSONhost(this.currentForm);
+    }
+
+    // Refresh form data
+    refreshFormData() {
+        if (this.currentForm) {
+            // Reload form from storage
+            const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            const updatedForm = forms.find(f => f.id === this.currentForm.id);
+            if (updatedForm) {
+                this.currentForm = updatedForm;
+                this.totalResponses.textContent = this.currentForm.responses?.length || 0;
+                this.loadFormDataTable();
+                this.showToast('Data refreshed', 'success');
+            }
+        }
+    }
+
+    // Clear response selection
+    clearResponseSelection() {
+        const checkboxes = document.querySelectorAll('.response-checkbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        this.updateDeleteButton();
     }
 }
 
