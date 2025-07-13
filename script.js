@@ -754,28 +754,43 @@ class NoticeBoard {
             throw new Error('JSONhost configuration invalid');
         }
 
+        // Get existing cloud data to preserve all information
+        let existingCloudData = {};
+        try {
+            const cloudResponse = await fetch(`${config.baseUrl}${config.jsonId}`);
+            if (cloudResponse.ok) {
+                existingCloudData = await cloudResponse.json();
+            }
+        } catch (error) {
+            console.log('No existing cloud data found, creating new structure');
+        }
+
         // Optimize notices for cloud sync by compressing attachments
         const optimizedNotices = await this.optimizeNoticesForCloud(this.notices);
         
         // Get forms data for cloud sync
         const formsData = JSON.parse(localStorage.getItem('smp-forms') || '[]');
 
+        // Preserve existing cloud forms if they exist and merge with local
+        const cloudForms = existingCloudData.forms || [];
+        const mergedForms = this.mergeForms(formsData, cloudForms);
+
         const data = {
             notices: optimizedNotices,
-            forms: formsData,
+            forms: mergedForms,
             lastUpdated: new Date().toISOString(),
             version: "1.0",
             metadata: {
                 title: "SMP College Notice Board",
                 description: "Official notices and announcements",
                 totalNotices: this.notices.length,
-                totalForms: formsData.length,
+                totalForms: mergedForms.length,
                 service: "jsonhost"
             }
         };
 
         // Log data size and attachment info for debugging
-        const originalSize = JSON.stringify({...data, notices: this.notices, forms: formsData}).length;
+        const originalSize = JSON.stringify({...data, notices: this.notices, forms: mergedForms}).length;
         const cloudSize = JSON.stringify(data).length;
         const attachmentCount = this.notices.reduce((count, notice) => 
             count + (notice.attachments ? notice.attachments.length : 0), 0);
@@ -785,7 +800,7 @@ class NoticeBoard {
         console.log(`Original size: ${(originalSize/1024).toFixed(1)}KB`);
         console.log(`Cloud size: ${(cloudSize/1024).toFixed(1)}KB`);
         console.log(`JSONhost limit: ${(jsonhostLimit/1024).toFixed(1)}KB`);
-        console.log(`Notices: ${this.notices.length}, Forms: ${formsData.length}`);
+        console.log(`Notices: ${this.notices.length}, Forms: ${mergedForms.length}`);
         console.log(`Attachments: ${attachmentCount}`);
         console.log(`Within limit: ${cloudSize <= jsonhostLimit ? '✅' : '❌'}`);
         
@@ -3919,11 +3934,6 @@ class NoticeBoard {
         this.saveFormToStorage(formData);
         this.saveFormToJSONhost(formData);
         
-        // Trigger cloud sync to include forms data in main sync
-        this.uploadToCloud().catch(error => {
-            console.error('Error syncing forms to cloud:', error);
-        });
-        
         // Enable form capture for current notice if we're editing one
         if (this.formCaptureEnabled) {
             this.formCaptureEnabled.checked = true;
@@ -3990,34 +4000,54 @@ class NoticeBoard {
         }
 
         try {
-            // Get existing forms data
-            const existingForms = await this.getFormsFromJSONhost() || [];
-            
-            // Update or add form
-            const existingIndex = existingForms.findIndex(f => f.id === formData.id);
-            if (existingIndex !== -1) {
-                existingForms[existingIndex] = formData;
-            } else {
-                existingForms.push(formData);
+            // Get the complete current data structure from JSONhost
+            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+            let currentData = {
+                notices: this.notices,
+                forms: [],
+                lastUpdated: new Date().toISOString(),
+                version: "1.0",
+                metadata: {
+                    title: "SMP College Notice Board",
+                    description: "Official notices and announcements",
+                    totalNotices: this.notices.length,
+                    totalForms: 0,
+                    service: "jsonhost"
+                }
+            };
+
+            // If JSONhost data exists, preserve it and update only forms
+            if (response.ok) {
+                currentData = await response.json();
+                currentData.forms = currentData.forms || [];
             }
 
-            // Save back to JSONhost using correct API format
-            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
+            // Update or add the specific form
+            const existingIndex = currentData.forms.findIndex(f => f.id === formData.id);
+            if (existingIndex !== -1) {
+                currentData.forms[existingIndex] = formData;
+            } else {
+                currentData.forms.push(formData);
+            }
+
+            // Update metadata
+            currentData.lastUpdated = new Date().toISOString();
+            currentData.metadata.totalForms = currentData.forms.length;
+
+            // Save the complete structure back to JSONhost
+            const updateResponse = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
                 },
-                body: JSON.stringify({
-                    forms: existingForms,
-                    lastUpdated: new Date().toISOString()
-                })
+                body: JSON.stringify(currentData)
             });
 
-            if (response.ok) {
+            if (updateResponse.ok) {
                 console.log('Form saved to JSONhost successfully');
             } else {
-                console.error('Failed to save form to JSONhost:', response.status);
+                console.error('Failed to save form to JSONhost:', updateResponse.status);
             }
         } catch (error) {
             console.error('Error saving form to JSONhost:', error);
@@ -4064,17 +4094,37 @@ class NoticeBoard {
                     data: responseData
                 });
 
-                // Save updated forms data using correct API format
+                // Get complete current data and update only the form
+                const getCurrentResponse = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+                let currentData = {
+                    notices: this.notices,
+                    forms: formsData,
+                    lastUpdated: new Date().toISOString(),
+                    version: "1.0",
+                    metadata: {
+                        title: "SMP College Notice Board",
+                        description: "Official notices and announcements",
+                        totalNotices: this.notices.length,
+                        totalForms: formsData.length,
+                        service: "jsonhost"
+                    }
+                };
+
+                if (getCurrentResponse.ok) {
+                    currentData = await getCurrentResponse.json();
+                    currentData.forms = formsData; // Update with new form data
+                    currentData.lastUpdated = new Date().toISOString();
+                    currentData.metadata.totalForms = formsData.length;
+                }
+
+                // Save complete structure back
                 const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
                     },
-                    body: JSON.stringify({
-                        forms: formsData,
-                        lastUpdated: new Date().toISOString()
-                    })
+                    body: JSON.stringify(currentData)
                 });
 
                 if (response.ok) {
@@ -4611,11 +4661,6 @@ class NoticeBoard {
         // Save to JSONhost
         this.saveFormToJSONhost(form);
         
-        // Trigger cloud sync to include forms data in main sync
-        this.uploadToCloud().catch(error => {
-            console.error('Error syncing form responses to cloud:', error);
-        });
-        
         console.log('Form response saved:', responseData);
     }
 
@@ -4822,11 +4867,6 @@ class NoticeBoard {
 
         // Update cloud storage
         this.saveFormToJSONhost(form);
-        
-        // Trigger cloud sync to include forms data in main sync
-        this.uploadToCloud().catch(error => {
-            console.error('Error syncing form toggle to cloud:', error);
-        });
 
         // Re-render notices to reflect changes
         this.render();
@@ -5127,11 +5167,6 @@ class NoticeBoard {
 
         // Update cloud storage
         this.saveFormToJSONhost(this.currentForm);
-        
-        // Trigger cloud sync to include forms data in main sync
-        this.uploadToCloud().catch(error => {
-            console.error('Error syncing form updates to cloud:', error);
-        });
     }
 
     // Refresh form data
