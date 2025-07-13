@@ -641,6 +641,12 @@ class NoticeBoard {
 
     processCloudData(cloudData, serviceName) {
         console.log('Processing cloud data:', cloudData);
+        console.log('🔍 DEBUG: Cloud data structure:', {
+            hasNotices: !!(cloudData && cloudData.notices),
+            hasForms: !!(cloudData && cloudData.forms),
+            noticesCount: cloudData?.notices?.length || 0,
+            formsCount: cloudData?.forms?.length || 0
+        });
         
         // Process notices data
         if (cloudData && cloudData.notices) {
@@ -705,18 +711,22 @@ class NoticeBoard {
 
         // Process forms data
         if (cloudData && cloudData.forms) {
-            console.log('Syncing forms data from cloud');
+            console.log('📋 Syncing forms data from cloud');
+            console.log('🔍 DEBUG: Cloud forms:', cloudData.forms);
             const cloudForms = cloudData.forms;
             const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            console.log('🔍 DEBUG: Local forms before merge:', localForms);
             
             // Merge forms: prefer newer versions based on lastModified or timestamp
             const mergedForms = this.mergeForms(localForms, cloudForms);
+            console.log('🔍 DEBUG: Merged forms result:', mergedForms);
             
             // Save merged forms to localStorage
             localStorage.setItem('smp-forms', JSON.stringify(mergedForms));
             console.log(`📋 Forms synced: ${mergedForms.length} forms`);
         } else {
-            console.log('No forms data found in cloud');
+            console.log('❌ No forms data found in cloud');
+            console.log('🔍 DEBUG: cloudData.forms is:', cloudData?.forms);
         }
 
         this.lastSyncTime = new Date().toISOString();
@@ -803,6 +813,13 @@ class NoticeBoard {
         console.log(`Notices: ${this.notices.length}, Forms: ${mergedForms.length}`);
         console.log(`Attachments: ${attachmentCount}`);
         console.log(`Within limit: ${cloudSize <= jsonhostLimit ? '✅' : '❌'}`);
+        console.log('🔍 DEBUG: Upload data structure:', {
+            hasNotices: !!data.notices,
+            hasForms: !!data.forms,
+            noticesCount: data.notices?.length || 0,
+            formsCount: data.forms?.length || 0,
+            formsData: data.forms
+        });
         
         if (cloudSize > jsonhostLimit) {
             console.warn(`⚠️ Payload too large for JSONhost (${(cloudSize/1024).toFixed(1)}KB > ${(jsonhostLimit/1024).toFixed(1)}KB)`);
@@ -1596,8 +1613,16 @@ class NoticeBoard {
 
         // Add form capture content if enabled
         let formHTML = '';
+        console.log(`🔍 DEBUG: Notice "${notice.title}" form check:`, {
+            formCaptureEnabled: notice.formCaptureEnabled,
+            formId: notice.formId,
+            hasFormData: !!notice.formData
+        });
         if (notice.formCaptureEnabled && notice.formId) {
+            console.log(`✅ Creating form HTML for notice "${notice.title}" with formId: ${notice.formId}`);
             formHTML = this.createFormHTML(notice.formId, notice);
+        } else {
+            console.log(`❌ No form for notice "${notice.title}" - formCaptureEnabled: ${notice.formCaptureEnabled}, formId: ${notice.formId}`);
         }
 
         return `
