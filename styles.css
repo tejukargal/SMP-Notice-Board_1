@@ -4987,3 +4987,259 @@ textarea:focus-visible {
 .dark-mode .section-progress {
   background: var(--background-secondary);
 }
+
+/* Scrollable Form Window Styles */
+.form-scrollable-window {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  margin-top: var(--spacing-md);
+  overflow: hidden;
+}
+
+.form-window-header {
+  background: var(--background-secondary);
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.form-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.progress-text {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 100px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  transition: width 0.3s ease;
+  border-radius: 3px;
+}
+
+.progress-count {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
+.form-window-content {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+}
+
+.form-questions-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.form-question-item {
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-question-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.form-question-item.focused {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-question-item.answered {
+  border-color: var(--success-color);
+  background: rgba(129, 199, 132, 0.05);
+}
+
+.form-question-item.answered .question-number {
+  background: var(--success-color);
+}
+
+.question-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.question-number {
+  background: var(--primary-color);
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.question-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.4;
+  flex: 1;
+  cursor: pointer;
+}
+
+.question-label .required {
+  color: var(--error-color);
+  margin-left: var(--spacing-xs);
+}
+
+.question-input {
+  margin-left: 32px; /* Align with question text */
+}
+
+.scrollable-form .form-actions {
+  text-align: center;
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+  margin-top: var(--spacing-md);
+}
+
+.scrollable-form .submit-form-btn {
+  min-width: 150px;
+  padding: var(--spacing-sm) var(--spacing-lg);
+}
+
+/* Enhanced form input styles for scrollable window */
+.form-question-item input,
+.form-question-item select,
+.form-question-item textarea {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-question-item input:focus,
+.form-question-item select:focus,
+.form-question-item textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-question-item textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* Checkbox and radio styles in scrollable form */
+.form-question-item .checkbox-group,
+.form-question-item .radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.form-question-item .checkbox-item,
+.form-question-item .radio-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s ease;
+}
+
+.form-question-item .checkbox-item:hover,
+.form-question-item .radio-item:hover {
+  background: var(--surface-hover);
+}
+
+.form-question-item .checkbox-item input,
+.form-question-item .radio-item input {
+  width: auto;
+  margin: 0;
+}
+
+/* Mobile responsiveness for scrollable form */
+@media (max-width: 768px) {
+  .form-window-content {
+    max-height: 350px;
+    padding: var(--spacing-sm);
+  }
+  
+  .form-progress {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    align-items: stretch;
+  }
+  
+  .progress-text,
+  .progress-count {
+    text-align: center;
+  }
+  
+  .question-header {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  .question-input {
+    margin-left: 0;
+  }
+}
+
+/* Dark mode adjustments for scrollable form */
+.dark-mode .form-scrollable-window {
+  background: var(--surface-color);
+  border-color: var(--border-color);
+}
+
+.dark-mode .form-window-header {
+  background: var(--background-secondary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .form-question-item {
+  background: var(--background-primary);
+  border-color: var(--border-color);
+}
+
+.dark-mode .form-question-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.dark-mode .progress-bar {
+  background: var(--border-color);
+}
+
+.dark-mode .scrollable-form .form-actions {
+  border-color: var(--border-color);
+}

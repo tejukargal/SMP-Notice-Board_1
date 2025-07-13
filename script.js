@@ -1478,6 +1478,11 @@ class NoticeBoard {
                 e.preventDefault();
                 this.handleFormSubmission(form);
             });
+            
+            // Add progress tracking for scrollable forms
+            if (form.classList.contains('scrollable-form')) {
+                this.setupFormProgressTracking(form);
+            }
         });
 
         // Add form toggle event listeners
@@ -1554,7 +1559,7 @@ class NoticeBoard {
         // Add form capture content if enabled
         let formHTML = '';
         if (notice.formCaptureEnabled && notice.formId) {
-            formHTML = this.createFormHTML(notice.formId);
+            formHTML = this.createFormHTML(notice.formId, notice);
         }
 
         return `
@@ -1918,6 +1923,7 @@ class NoticeBoard {
             popupEnabled: this.popupEnabled.checked,
             formCaptureEnabled: this.formCaptureEnabled.checked,
             formId: this.formCaptureEnabled.checked ? (this.currentForm?.id || this.currentEditingFormId) : null,
+            formData: this.formCaptureEnabled.checked && this.currentForm ? this.currentForm : null,
             order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
@@ -3897,8 +3903,18 @@ class NoticeBoard {
         
         // Auto-enable form capture when creating/editing a form
         if (this.currentEditingNotice) {
-            // We're editing an existing notice - update it with the form
+            // We're editing an existing notice - embed the form data directly
+            this.currentEditingNotice.formData = formData;
+            this.currentEditingNotice.formId = formData.id;
             this.formCaptureEnabled.checked = true;
+            
+            // Update the notice in the notices array
+            const noticeIndex = this.notices.findIndex(n => n.id === this.currentEditingNotice.id);
+            if (noticeIndex !== -1) {
+                this.notices[noticeIndex] = this.currentEditingNotice;
+                this.saveToStorage();
+                this.uploadToCloud();
+            }
         }
         
         // Store form ID for current editing session
@@ -4048,12 +4064,17 @@ class NoticeBoard {
     }
 
     // Create form HTML for display in notice cards
-    createFormHTML(formId) {
+    createFormHTML(formId, notice) {
         if (!formId) return '';
         
-        // Get form data from localStorage
-        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
-        const form = forms.find(f => f.id === formId);
+        // First try to get form from notice data (embedded form)
+        let form = notice.formData;
+        
+        // Fallback to localStorage if no embedded form data
+        if (!form) {
+            const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            form = forms.find(f => f.id === formId);
+        }
         
         if (!form) return '';
         
@@ -4061,6 +4082,7 @@ class NoticeBoard {
         if (!form.enabled && !this.isAdmin) return '';
         
         const isDisabled = !form.enabled;
+        const questions = form.questions || [];
         
         return `
             <div class="notice-form-container ${isDisabled ? 'form-disabled' : ''}">
@@ -4083,7 +4105,57 @@ class NoticeBoard {
                     ${form.description ? `<p class="form-description">${form.description}</p>` : ''}
                     ${isDisabled && this.isAdmin ? '<p class="form-disabled-message"><i class="fas fa-info-circle"></i> This form is disabled and not visible to students.</p>' : ''}
                 </div>
-                ${!isDisabled ? this.createFormContentWithNavigation(form, formId) : ''}
+                ${!isDisabled ? this.createScrollableFormWindow(form, formId) : ''}
+            </div>
+        `;
+    }
+
+    // Create scrollable form window similar to scrolling messages
+    createScrollableFormWindow(form, formId) {
+        const questions = form.questions || [];
+        if (questions.length === 0) return '';
+        
+        const questionsHTML = questions.map((question, index) => {
+            return `
+                <div class="form-question-item" data-question-index="${index}">
+                    <div class="question-header">
+                        <span class="question-number">${index + 1}</span>
+                        <label class="question-label">
+                            ${question.question}
+                            ${question.required ? '<span class="required">*</span>' : ''}
+                        </label>
+                    </div>
+                    <div class="question-input">
+                        ${this.createQuestionHTML(question)}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="form-scrollable-window">
+                <div class="form-window-header">
+                    <div class="form-progress">
+                        <span class="progress-text">Form Progress</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <span class="progress-count">0 / ${questions.length}</span>
+                    </div>
+                </div>
+                <div class="form-window-content">
+                    <form class="notice-form scrollable-form" data-form-id="${formId}">
+                        <div class="form-questions-scroll">
+                            ${questionsHTML}
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary submit-form-btn">
+                                <i class="fas fa-paper-plane"></i>
+                                Submit Response
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         `;
     }
@@ -4130,6 +4202,76 @@ class NoticeBoard {
                 </div>
             </div>
         `;
+    }
+
+    // Setup form progress tracking for scrollable forms
+    setupFormProgressTracking(form) {
+        const formContainer = form.closest('.form-scrollable-window');
+        if (!formContainer) return;
+
+        const progressFill = formContainer.querySelector('.progress-fill');
+        const progressCount = formContainer.querySelector('.progress-count');
+        const questions = form.querySelectorAll('.form-question-item');
+        
+        if (!progressFill || !progressCount || questions.length === 0) return;
+
+        const totalQuestions = questions.length;
+        
+        // Function to update progress
+        const updateProgress = () => {
+            let answeredQuestions = 0;
+            
+            questions.forEach(questionItem => {
+                const inputs = questionItem.querySelectorAll('input, select, textarea');
+                let hasAnswer = false;
+                
+                inputs.forEach(input => {
+                    if (input.type === 'checkbox' || input.type === 'radio') {
+                        if (input.checked) hasAnswer = true;
+                    } else if (input.value && input.value.trim() !== '') {
+                        hasAnswer = true;
+                    }
+                });
+                
+                if (hasAnswer) {
+                    answeredQuestions++;
+                    questionItem.classList.add('answered');
+                } else {
+                    questionItem.classList.remove('answered');
+                }
+            });
+            
+            const progressPercentage = (answeredQuestions / totalQuestions) * 100;
+            progressFill.style.width = `${progressPercentage}%`;
+            progressCount.textContent = `${answeredQuestions} / ${totalQuestions}`;
+            
+            // Update progress bar color based on completion
+            if (progressPercentage === 100) {
+                progressFill.style.background = 'var(--success-color)';
+            } else if (progressPercentage >= 50) {
+                progressFill.style.background = 'var(--info-color)';
+            } else {
+                progressFill.style.background = 'var(--primary-color)';
+            }
+        };
+
+        // Add event listeners to all form inputs
+        questions.forEach(questionItem => {
+            const inputs = questionItem.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('input', updateProgress);
+                input.addEventListener('change', updateProgress);
+                input.addEventListener('focus', () => {
+                    questionItem.classList.add('focused');
+                });
+                input.addEventListener('blur', () => {
+                    questionItem.classList.remove('focused');
+                });
+            });
+        });
+
+        // Initial progress calculation
+        updateProgress();
     }
 
     // Create navigation for form sections
