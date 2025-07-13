@@ -468,6 +468,9 @@ class NoticeBoard {
     }
 
     async initializeCloudSync() {
+        console.log('🔄 Initializing cloud sync...');
+        console.log('🔍 DEBUG: Cloud config:', window.CLOUD_CONFIG);
+        
         if (!window.CLOUD_CONFIG) {
             console.error('CLOUD_CONFIG not found');
             this.updateSyncStatus('offline', 'Cloud sync not configured');
@@ -481,7 +484,9 @@ class NoticeBoard {
         }
 
         try {
+            console.log('🔄 Triggering initial cloud sync...');
             await this.syncWithCloud();
+            console.log('✅ Initial cloud sync completed');
         } catch (error) {
             console.error('Initial cloud sync failed:', error);
             this.updateSyncStatus('error', `Sync failed: ${error.message}`);
@@ -1455,6 +1460,13 @@ class NoticeBoard {
     }
 
     async render() {
+        // Check forms availability before rendering notices
+        const formsData = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        console.log('🔍 DEBUG: Forms available during render:', {
+            formsCount: formsData.length,
+            formIds: formsData.map(f => f.id)
+        });
+        
         if (this.filteredNotices.length === 0) {
             this.noticesContainer.innerHTML = '';
             this.emptyState.style.display = 'block';
@@ -4168,18 +4180,25 @@ class NoticeBoard {
 
     // Create form HTML for display in notice cards
     createFormHTML(formId, notice) {
+        console.log(`🔍 DEBUG: createFormHTML called with formId: ${formId}`);
         if (!formId) return '';
         
         // First try to get form from notice data (embedded form)
         let form = notice.formData;
+        console.log(`🔍 DEBUG: Embedded form data:`, form);
         
         // Fallback to localStorage if no embedded form data
         if (!form) {
             const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            console.log(`🔍 DEBUG: Available forms in localStorage:`, forms.map(f => ({id: f.id, title: f.title})));
             form = forms.find(f => f.id === formId);
+            console.log(`🔍 DEBUG: Found form in localStorage:`, form ? {id: form.id, title: form.title} : 'NOT FOUND');
         }
         
-        if (!form) return '';
+        if (!form) {
+            console.log(`❌ Form with ID ${formId} not found anywhere!`);
+            return '';
+        }
         
         // Show disabled forms to admins, hide from regular users
         if (!form.enabled && !this.isAdmin) return '';
