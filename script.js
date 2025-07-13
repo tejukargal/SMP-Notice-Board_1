@@ -124,10 +124,10 @@ class NoticeBoard {
     // Get scroll speed multiplier based on setting
     getScrollSpeed(speedSetting = 'medium') {
         const speeds = {
-            'slow': 3.0,     // Slow and readable
-            'medium': 2.0,   // Optimal for reading
-            'fast': 1.2,     // Faster pace
-            'speed': 0.8     // Very fast
+            'slow': 2.0,     // Slow and readable
+            'medium': 1.2,   // Optimal for reading
+            'fast': 0.7,     // Fast pace for long lists
+            'speed': 0.3     // Very fast scrolling for very long lists
         };
         return speeds[speedSetting] || speeds['medium'];
     }
@@ -370,6 +370,9 @@ class NoticeBoard {
 
         // Export modal
         document.getElementById('closeExportModal').addEventListener('click', () => this.hideExportModal());
+        
+        // Scrolling data modal
+        document.getElementById('closeScrollingDataModal').addEventListener('click', () => this.hideScrollingDataModal());
     }
 
     initializeQuill() {
@@ -1442,6 +1445,17 @@ class NoticeBoard {
                         });
                     }
                 }
+                
+                // Add scrolling content click listener
+                const scrollingContent = card.querySelector('.scrolling-message-inline');
+                if (scrollingContent) {
+                    scrollingContent.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.showScrollingDataModal(notice);
+                    });
+                    scrollingContent.style.cursor = 'pointer';
+                    scrollingContent.classList.add('scrolling-data-clickable');
+                }
             }
         });
     }
@@ -2037,6 +2051,136 @@ class NoticeBoard {
 
     hideExportModal() {
         this.exportModal.classList.remove('show');
+    }
+
+    showScrollingDataModal(notice) {
+        const csvFileNumber = notice.order || 1;
+        const csvData = this.csvData[csvFileNumber];
+        
+        if (!csvData || !notice.scrollingEnabled) {
+            this.showToast('No scrolling data available for this notice', 'info');
+            return;
+        }
+
+        // Set modal title
+        document.getElementById('scrollingDataTitle').textContent = notice.scrollingLabel || 'Data List';
+        
+        // Create table HTML
+        const tableHTML = this.createScrollingDataTable(csvData, notice.scrollingLabel);
+        document.getElementById('scrollingDataContainer').innerHTML = tableHTML;
+        
+        // Show modal
+        this.scrollingDataModal = document.getElementById('scrollingDataModal');
+        this.scrollingDataModal.classList.add('show');
+        
+        // Start auto-close timer
+        this.startAutoCloseTimer();
+    }
+
+    hideScrollingDataModal() {
+        const modal = document.getElementById('scrollingDataModal');
+        if (modal) {
+            modal.classList.remove('show');
+        }
+        
+        // Clear auto-close timer
+        if (this.autoCloseTimer) {
+            clearInterval(this.autoCloseTimer);
+            this.autoCloseTimer = null;
+        }
+        
+        if (this.autoCloseInterval) {
+            clearInterval(this.autoCloseInterval);
+            this.autoCloseInterval = null;
+        }
+    }
+
+    createScrollingDataTable(csvData, label) {
+        try {
+            const lines = csvData.trim().split('\n');
+            if (lines.length === 0) {
+                return '<p>No data available</p>';
+            }
+
+            // Parse CSV data
+            const rows = lines.map(line => {
+                // Simple CSV parsing - handles basic comma separation
+                return line.split(',').map(cell => cell.trim());
+            });
+
+            if (rows.length === 0) {
+                return '<p>No data available</p>';
+            }
+
+            // Use first row as headers
+            const headers = rows[0];
+            const dataRows = rows.slice(1);
+
+            let tableHTML = `
+                <table class="scrolling-data-table">
+                    <thead>
+                        <tr>
+                            ${headers.map(header => `<th>${this.escapeHtml(header)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            dataRows.forEach(row => {
+                tableHTML += '<tr>';
+                headers.forEach((header, index) => {
+                    const cellData = row[index] || '';
+                    tableHTML += `<td title="${this.escapeHtml(cellData)}">${this.escapeHtml(cellData)}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+
+            return tableHTML;
+        } catch (error) {
+            console.error('Error creating scrolling data table:', error);
+            return '<p>Error loading data</p>';
+        }
+    }
+
+    startAutoCloseTimer() {
+        let timeLeft = 20;
+        const timerElement = document.getElementById('timerText');
+        
+        // Clear any existing timers
+        if (this.autoCloseTimer) {
+            clearTimeout(this.autoCloseTimer);
+        }
+        if (this.autoCloseInterval) {
+            clearInterval(this.autoCloseInterval);
+        }
+        
+        // Update timer display every second
+        this.autoCloseInterval = setInterval(() => {
+            timeLeft--;
+            if (timerElement) {
+                timerElement.textContent = `${timeLeft}s`;
+            }
+            
+            if (timeLeft <= 0) {
+                clearInterval(this.autoCloseInterval);
+                this.hideScrollingDataModal();
+            }
+        }, 1000);
+        
+        // Set the main auto-close timer
+        this.autoCloseTimer = setTimeout(() => {
+            this.hideScrollingDataModal();
+        }, 20000);
+        
+        // Initialize timer display
+        if (timerElement) {
+            timerElement.textContent = `${timeLeft}s`;
+        }
     }
 
     showImportDialog() {
@@ -2733,6 +2877,8 @@ class NoticeBoard {
                 this.hideAdminModal();
             } else if (this.exportModal.classList.contains('show')) {
                 this.hideExportModal();
+            } else if (document.getElementById('scrollingDataModal').classList.contains('show')) {
+                this.hideScrollingDataModal();
             }
         }
     }

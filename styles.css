@@ -2509,6 +2509,186 @@ table.csv-table,
   color: var(--primary-color);
 }
 
+/* Scrolling Data Modal */
+.scrolling-modal {
+  max-width: 95vw;
+  max-height: 70vh;
+  width: 1200px;
+}
+
+.scrolling-modal .modal-body {
+  padding: 0;
+  max-height: calc(70vh - 120px);
+  overflow: hidden;
+}
+
+.auto-close-timer {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  background: rgba(var(--warning-rgb), 0.1);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(var(--warning-rgb), 0.2);
+}
+
+.auto-close-timer i {
+  color: var(--warning-color);
+}
+
+.scrolling-data-container {
+  height: 100%;
+  max-height: calc(70vh - 120px);
+  overflow: auto;
+  padding: var(--spacing-md);
+  background: var(--surface-color);
+}
+
+.scrolling-data-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.scrolling-data-table th {
+  background: var(--primary-color);
+  color: white;
+  padding: var(--spacing-sm) var(--spacing-xs);
+  text-align: left;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.scrolling-data-table td {
+  padding: var(--spacing-xs);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+/* Column-specific widths to match original scrolling display */
+.scrolling-data-table th:first-child,
+.scrolling-data-table td:first-child {
+  width: 50px;
+  min-width: 50px;
+  max-width: 50px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.scrolling-data-table th:nth-child(2),
+.scrolling-data-table td:nth-child(2) {
+  width: 45%;
+  min-width: 200px;
+  font-weight: 500;
+}
+
+.scrolling-data-table th:nth-child(3),
+.scrolling-data-table td:nth-child(3) {
+  width: 25%;
+  min-width: 100px;
+  text-align: center;
+}
+
+.scrolling-data-table th:last-child,
+.scrolling-data-table td:last-child {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+  text-align: right;
+}
+
+.scrolling-data-table tr:nth-child(even) {
+  background: rgba(var(--primary-rgb), 0.02);
+}
+
+.scrolling-data-table tr:hover {
+  background: rgba(var(--primary-rgb), 0.05);
+}
+
+.scrolling-data-clickable {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.scrolling-data-clickable:hover {
+  background: rgba(var(--primary-rgb), 0.1) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.1);
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .scrolling-data-table th {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .scrolling-data-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="dark"] .scrolling-data-table tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .scrolling-data-clickable:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Responsive adjustments for scrolling data modal */
+@media (max-width: 768px) {
+  .scrolling-modal {
+    width: 95vw;
+    max-width: 95vw;
+  }
+  
+  .scrolling-data-table {
+    font-size: var(--font-size-xs);
+  }
+  
+  .scrolling-data-table th,
+  .scrolling-data-table td {
+    padding: var(--spacing-xs);
+  }
+  
+  /* Adjust column widths for mobile */
+  .scrolling-data-table th:first-child,
+  .scrolling-data-table td:first-child {
+    width: 35px;
+    min-width: 35px;
+    max-width: 35px;
+  }
+  
+  .scrolling-data-table th:nth-child(2),
+  .scrolling-data-table td:nth-child(2) {
+    width: 50%;
+    min-width: 120px;
+  }
+  
+  .scrolling-data-table th:nth-child(3),
+  .scrolling-data-table td:nth-child(3) {
+    width: 20%;
+    min-width: 60px;
+  }
+  
+  .scrolling-data-table th:last-child,
+  .scrolling-data-table td:last-child {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+  }
+}
+
 /* Toast Notifications */
 .toast-container {
   position: fixed;
