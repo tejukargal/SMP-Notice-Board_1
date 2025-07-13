@@ -642,6 +642,7 @@ class NoticeBoard {
     processCloudData(cloudData, serviceName) {
         console.log('Processing cloud data:', cloudData);
         
+        // Process notices data
         if (cloudData && cloudData.notices) {
             const cloudNotices = cloudData.notices;
             const cloudLastUpdated = new Date(cloudData.lastUpdated || 0);
@@ -702,6 +703,22 @@ class NoticeBoard {
             console.log('No valid cloud data or notices array found');
         }
 
+        // Process forms data
+        if (cloudData && cloudData.forms) {
+            console.log('Syncing forms data from cloud');
+            const cloudForms = cloudData.forms;
+            const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            
+            // Merge forms: prefer newer versions based on lastModified or timestamp
+            const mergedForms = this.mergeForms(localForms, cloudForms);
+            
+            // Save merged forms to localStorage
+            localStorage.setItem('smp-forms', JSON.stringify(mergedForms));
+            console.log(`📋 Forms synced: ${mergedForms.length} forms`);
+        } else {
+            console.log('No forms data found in cloud');
+        }
+
         this.lastSyncTime = new Date().toISOString();
         this.updateSyncStatus('synced', `Synced via ${serviceName}`, true);
     }
@@ -739,21 +756,26 @@ class NoticeBoard {
 
         // Optimize notices for cloud sync by compressing attachments
         const optimizedNotices = await this.optimizeNoticesForCloud(this.notices);
+        
+        // Get forms data for cloud sync
+        const formsData = JSON.parse(localStorage.getItem('smp-forms') || '[]');
 
         const data = {
             notices: optimizedNotices,
+            forms: formsData,
             lastUpdated: new Date().toISOString(),
             version: "1.0",
             metadata: {
                 title: "SMP College Notice Board",
                 description: "Official notices and announcements",
                 totalNotices: this.notices.length,
+                totalForms: formsData.length,
                 service: "jsonhost"
             }
         };
 
         // Log data size and attachment info for debugging
-        const originalSize = JSON.stringify({...data, notices: this.notices}).length;
+        const originalSize = JSON.stringify({...data, notices: this.notices, forms: formsData}).length;
         const cloudSize = JSON.stringify(data).length;
         const attachmentCount = this.notices.reduce((count, notice) => 
             count + (notice.attachments ? notice.attachments.length : 0), 0);
@@ -763,6 +785,7 @@ class NoticeBoard {
         console.log(`Original size: ${(originalSize/1024).toFixed(1)}KB`);
         console.log(`Cloud size: ${(cloudSize/1024).toFixed(1)}KB`);
         console.log(`JSONhost limit: ${(jsonhostLimit/1024).toFixed(1)}KB`);
+        console.log(`Notices: ${this.notices.length}, Forms: ${formsData.length}`);
         console.log(`Attachments: ${attachmentCount}`);
         console.log(`Within limit: ${cloudSize <= jsonhostLimit ? '✅' : '❌'}`);
         
@@ -3896,6 +3919,11 @@ class NoticeBoard {
         this.saveFormToStorage(formData);
         this.saveFormToJSONhost(formData);
         
+        // Trigger cloud sync to include forms data in main sync
+        this.uploadToCloud().catch(error => {
+            console.error('Error syncing forms to cloud:', error);
+        });
+        
         // Enable form capture for current notice if we're editing one
         if (this.formCaptureEnabled) {
             this.formCaptureEnabled.checked = true;
@@ -4583,6 +4611,11 @@ class NoticeBoard {
         // Save to JSONhost
         this.saveFormToJSONhost(form);
         
+        // Trigger cloud sync to include forms data in main sync
+        this.uploadToCloud().catch(error => {
+            console.error('Error syncing form responses to cloud:', error);
+        });
+        
         console.log('Form response saved:', responseData);
     }
 
@@ -4789,6 +4822,11 @@ class NoticeBoard {
 
         // Update cloud storage
         this.saveFormToJSONhost(form);
+        
+        // Trigger cloud sync to include forms data in main sync
+        this.uploadToCloud().catch(error => {
+            console.error('Error syncing form toggle to cloud:', error);
+        });
 
         // Re-render notices to reflect changes
         this.render();
@@ -5089,6 +5127,11 @@ class NoticeBoard {
 
         // Update cloud storage
         this.saveFormToJSONhost(this.currentForm);
+        
+        // Trigger cloud sync to include forms data in main sync
+        this.uploadToCloud().catch(error => {
+            console.error('Error syncing form updates to cloud:', error);
+        });
     }
 
     // Refresh form data
