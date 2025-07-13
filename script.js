@@ -4109,15 +4109,21 @@ class NoticeBoard {
     }
 
     async saveFormResponseToJSONhost(formId, responseData) {
+        console.log(`🔄 saveFormResponseToJSONhost called with formId: ${formId}`);
+        console.log('🔍 DEBUG: Response data to save:', responseData);
+        
         if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
-            console.log('JSONhost not configured for form responses');
+            console.log('❌ JSONhost not configured for form responses');
             return;
         }
 
         try {
             // Get current forms data
+            console.log('📥 Getting current forms from JSONhost...');
             const formsData = await this.getFormsFromJSONhost() || [];
+            console.log(`📥 Retrieved ${formsData.length} forms from JSONhost`);
             const form = formsData.find(f => f.id === formId);
+            console.log('🔍 DEBUG: Found form in JSONhost:', form ? {id: form.id, title: form.title, responsesCount: form.responses?.length || 0} : 'NOT FOUND');
             
             if (form) {
                 if (!form.responses) {
@@ -4165,10 +4171,11 @@ class NoticeBoard {
                 });
 
                 if (response.ok) {
-                    console.log('Form response saved to JSONhost successfully');
+                    console.log('✅ Form response saved to JSONhost successfully');
+                    console.log(`✅ Form "${form.title}" now has ${form.responses.length} responses in cloud`);
                     return true;
                 } else {
-                    console.error('Failed to save form response to JSONhost:', response.status);
+                    console.error('❌ Failed to save form response to JSONhost:', response.status);
                     return false;
                 }
             }
@@ -4688,11 +4695,16 @@ class NoticeBoard {
 
     // Save form response to storage and cloud
     saveFormResponse(form, responseData) {
+        console.log('🔍 DEBUG: Saving form response for form:', form.id);
+        console.log('🔍 DEBUG: Response data:', responseData);
+        
         // Add response to form
         if (!form.responses) {
             form.responses = [];
         }
         form.responses.push(responseData);
+        
+        console.log(`🔍 DEBUG: Form now has ${form.responses.length} responses`);
         
         // Update form in localStorage
         const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
@@ -4700,10 +4712,12 @@ class NoticeBoard {
         if (formIndex !== -1) {
             forms[formIndex] = form;
             localStorage.setItem('smp-forms', JSON.stringify(forms));
+            console.log('✅ Form with response saved to localStorage');
         }
         
         // Save to JSONhost
-        this.saveFormToJSONhost(form);
+        console.log('🔄 Saving response to JSONhost...');
+        this.saveFormResponseToJSONhost(form.id, responseData);
         
         console.log('Form response saved:', responseData);
     }
