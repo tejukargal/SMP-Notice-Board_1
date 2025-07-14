@@ -434,13 +434,6 @@
                                 <label for="formDescription">Description</label>
                                 <textarea id="formDescription" placeholder="Brief description of the form purpose" maxlength="500"></textarea>
                             </div>
-                            <div class="form-group">
-                                <label for="formEnabled">
-                                    <input type="checkbox" id="formEnabled" checked>
-                                    <span>Enable Form for Students</span>
-                                </label>
-                                <small class="form-help">Allow students to submit responses</small>
-                            </div>
                         </div>
 
                         <!-- Question Builder -->
@@ -468,6 +461,10 @@
                             <button type="button" class="btn btn-success admin-only" id="manageFormDataBtn" style="display: none;" title="Manage Form Responses">
                                 <i class="fas fa-table"></i>
                                 Manage Data
+                            </button>
+                            <button type="button" class="btn btn-danger admin-only" id="deleteFormBtn" style="display: none;" title="Delete Form and All Data">
+                                <i class="fas fa-trash"></i>
+                                Delete Form
                             </button>
                             <button type="button" class="btn btn-success" id="saveFormBtn">
                                 <i class="fas fa-save"></i>

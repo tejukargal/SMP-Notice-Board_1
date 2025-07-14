@@ -2001,8 +2001,8 @@ class NoticeBoard {
             scrollingSpeed: this.scrollingSpeed.value || 'medium',
             popupEnabled: this.popupEnabled.checked,
             formCaptureEnabled: this.formCaptureEnabled.checked,
-            formId: this.formCaptureEnabled.checked ? (this.currentForm?.id || this.currentEditingFormId) : null,
-            formData: this.formCaptureEnabled.checked && this.currentForm ? this.currentForm : null,
+            formId: this.currentForm?.id || this.currentEditingFormId || null,
+            formData: this.currentForm || null,
             order: this.calculateNoticeOrder(),
             timestamp: new Date().toISOString(),
             lastModified: new Date().toISOString()
@@ -3419,7 +3419,7 @@ class NoticeBoard {
         this.closeFormsModal = document.getElementById('closeFormsModal');
         this.formTitle = document.getElementById('formTitle');
         this.formDescription = document.getElementById('formDescription');
-        this.formEnabled = document.getElementById('formEnabled');
+        // this.formEnabled = document.getElementById('formEnabled'); // Removed - now controlled by formCaptureEnabled
         this.questionsContainer = document.getElementById('questionsContainer');
         this.addQuestionBtn = document.getElementById('addQuestionBtn');
         this.saveFormBtn = document.getElementById('saveFormBtn');
@@ -3431,6 +3431,7 @@ class NoticeBoard {
         this.backToBuilderBtn = document.getElementById('backToBuilderBtn');
         this.exportFormDataBtn = document.getElementById('exportFormDataBtn');
         this.manageFormDataBtn = document.getElementById('manageFormDataBtn');
+        this.deleteFormBtn = document.getElementById('deleteFormBtn');
 
         // Form data management modal elements
         this.formDataModal = document.getElementById('formDataModal');
@@ -3467,6 +3468,7 @@ class NoticeBoard {
         this.publishFormBtn?.addEventListener('click', () => this.publishForm());
         this.exportFormDataBtn?.addEventListener('click', () => this.showFormExportOptions());
         this.manageFormDataBtn?.addEventListener('click', () => this.openFormDataManagement());
+        this.deleteFormBtn?.addEventListener('click', () => this.deleteForm());
 
         // Form data management modal events
         this.closeFormDataModal?.addEventListener('click', () => this.closeFormDataManagement());
@@ -3550,11 +3552,16 @@ class NoticeBoard {
     resetFormBuilder() {
         this.formTitle.value = '';
         this.formDescription.value = '';
-        this.formEnabled.checked = true;
+        // this.formEnabled.checked = true; // Removed - now controlled by formCaptureEnabled
         this.questionsContainer.innerHTML = '';
         this.formQuestions = [];
         this.questionIdCounter = 0;
         this.currentForm = null;
+        
+        // Hide admin buttons when creating new form
+        this.exportFormDataBtn.style.display = 'none';
+        this.manageFormDataBtn.style.display = 'none';
+        this.deleteFormBtn.style.display = 'none';
     }
 
     loadExistingForm(formId) {
@@ -3569,7 +3576,7 @@ class NoticeBoard {
         // Populate form builder with existing data
         this.formTitle.value = form.title;
         this.formDescription.value = form.description || '';
-        this.formEnabled.checked = form.enabled;
+        // this.formEnabled.checked = form.enabled; // Removed - now controlled by formCaptureEnabled
         this.currentForm = form;
         
         // Load existing questions
@@ -3589,6 +3596,13 @@ class NoticeBoard {
         } else {
             this.exportFormDataBtn.style.display = 'none';
             this.manageFormDataBtn.style.display = 'none';
+        }
+
+        // Show delete button if user is admin and editing existing form
+        if (this.isAdmin && form.id) {
+            this.deleteFormBtn.style.display = 'inline-block';
+        } else {
+            this.deleteFormBtn.style.display = 'none';
         }
         
         console.log('Loaded existing form for editing:', form.title);
@@ -3962,7 +3976,7 @@ class NoticeBoard {
             id: isEditing ? this.currentForm.id : Date.now().toString(),
             title: this.formTitle.value.trim(),
             description: this.formDescription.value.trim(),
-            enabled: this.formEnabled.checked,
+            enabled: true, // Always enabled - controlled by formCaptureEnabled in notice
             questions: this.formQuestions.map(q => ({...q})),
             created: isEditing ? this.currentForm.created : new Date().toISOString(),
             lastModified: new Date().toISOString(),
@@ -4001,6 +4015,50 @@ class NoticeBoard {
         
         const action = isEditing ? 'updated' : 'created';
         this.showToast(`Form ${action} successfully! You can now enable it in the notice.`, 'success');
+        this.closeFormsModalHandler();
+    }
+
+    deleteForm() {
+        if (!this.currentForm) {
+            this.showToast('No form selected to delete', 'warning');
+            return;
+        }
+
+        const confirmMessage = `Are you sure you want to delete the form "${this.currentForm.title}"?\n\nThis will permanently delete:\n- The form structure\n- All ${this.currentForm.responses?.length || 0} responses\n- All associated data from the cloud\n\nThis action cannot be undone.`;
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+
+        const formId = this.currentForm.id;
+        const formTitle = this.currentForm.title;
+
+        // Remove from localStorage
+        const existingForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const filteredForms = existingForms.filter(f => f.id !== formId);
+        localStorage.setItem('smp-forms', JSON.stringify(filteredForms));
+
+        // Remove from cloud
+        this.deleteFormFromJSONhost(formId);
+
+        // Remove form reference from any notices
+        this.notices.forEach(notice => {
+            if (notice.formId === formId) {
+                notice.formCaptureEnabled = false;
+                notice.formId = null;
+                notice.formData = null;
+            }
+        });
+
+        // Save updated notices
+        this.saveToStorage();
+        this.uploadToCloud();
+
+        // Clear current form
+        this.currentForm = null;
+        this.currentEditingFormId = null;
+
+        this.showToast(`Form "${formTitle}" deleted successfully`, 'success');
         this.closeFormsModalHandler();
     }
 
@@ -4092,6 +4150,62 @@ class NoticeBoard {
             }
         } catch (error) {
             console.error('Error saving form to JSONhost:', error);
+        }
+    }
+
+    async deleteFormFromJSONhost(formId) {
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            console.log('JSONhost not configured for forms');
+            return;
+        }
+
+        try {
+            // Get the complete current data structure from JSONhost
+            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+            let currentData = {
+                notices: this.notices,
+                forms: [],
+                lastUpdated: new Date().toISOString(),
+                version: "1.0",
+                metadata: {
+                    title: "SMP College Notice Board",
+                    description: "Official notices and announcements",
+                    totalNotices: this.notices.length,
+                    totalForms: 0,
+                    service: "jsonhost"
+                }
+            };
+
+            // If JSONhost data exists, preserve it and update only forms
+            if (response.ok) {
+                currentData = await response.json();
+                currentData.forms = currentData.forms || [];
+            }
+
+            // Remove the specific form
+            currentData.forms = currentData.forms.filter(f => f.id !== formId);
+
+            // Update metadata
+            currentData.lastUpdated = new Date().toISOString();
+            currentData.metadata.totalForms = currentData.forms.length;
+
+            // Save the complete structure back to JSONhost
+            const updateResponse = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
+                },
+                body: JSON.stringify(currentData)
+            });
+
+            if (updateResponse.ok) {
+                console.log('Form deleted from JSONhost successfully');
+            } else {
+                console.error('Failed to delete form from JSONhost:', updateResponse.status);
+            }
+        } catch (error) {
+            console.error('Error deleting form from JSONhost:', error);
         }
     }
 
