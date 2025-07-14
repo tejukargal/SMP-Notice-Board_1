@@ -4369,8 +4369,8 @@ class NoticeBoard {
                 <div class="simple-form-question" data-question-index="${index}">
                     <div class="question-row">
                         <span class="question-text">${question.question}</span>
-                        <span class="question-number">Q${index + 1}:</span>
                         ${question.required ? '<span class="required">*</span>' : ''}
+                        <span class="question-number">Q${index + 1}:</span>
                     </div>
                     <div class="question-answer">
                         ${this.createSimpleQuestionHTML(question)}

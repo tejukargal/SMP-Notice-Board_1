@@ -4691,7 +4691,8 @@ textarea:focus-visible {
   
   .notice-form .radio-group,
   .notice-form .checkbox-group {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: var(--spacing-sm);
   }
   
@@ -4704,7 +4705,8 @@ textarea:focus-visible {
   /* Simple form mobile adjustments */
   .simple-radio-group,
   .simple-checkbox-group {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: var(--spacing-sm);
   }
   
@@ -4712,6 +4714,47 @@ textarea:focus-visible {
   .simple-form-textarea,
   .simple-form-select {
     font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  /* Ensure question layout works on mobile */
+  .question-row {
+    flex-wrap: nowrap;
+    gap: var(--spacing-xs);
+  }
+  
+  .question-text {
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+  
+  .question-number {
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  
+  /* Optimize simple form options for mobile */
+  .simple-radio-option,
+  .simple-checkbox-option {
+    font-size: 0.9rem;
+    padding: var(--spacing-xs);
+    margin-right: var(--spacing-xs);
+  }
+  
+  .simple-radio-option::before,
+  .simple-checkbox-option::before {
+    font-size: 1rem;
+  }
+  
+  /* Ensure form actions are properly sized on mobile */
+  .form-actions {
+    margin-top: var(--spacing-md);
+    text-align: center;
+  }
+  
+  .submit-form-btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    font-size: 1rem;
+    min-height: 44px; /* Touch-friendly size */
   }
 }
 
@@ -4733,6 +4776,7 @@ textarea:focus-visible {
 .question-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-xs);
 }
@@ -4741,12 +4785,15 @@ textarea:focus-visible {
   font-size: 1rem;
   color: var(--text-primary);
   font-weight: 500;
+  flex: 1;
 }
 
 .question-number {
   font-size: 0.9rem;
   color: var(--text-secondary);
   font-weight: 600;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .question-answer {
@@ -5185,6 +5232,93 @@ textarea:focus-visible {
 
 .form-data-table tbody tr.selected {
   background: rgba(102, 126, 234, 0.1);
+}
+
+/* Mobile responsive styles for data management table */
+@media (max-width: 768px) {
+  .form-data-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -var(--spacing-md);
+    padding: 0 var(--spacing-md);
+  }
+  
+  .form-data-table {
+    min-width: 600px;
+    font-size: 0.85rem;
+  }
+  
+  .form-data-table th,
+  .form-data-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    white-space: nowrap;
+  }
+  
+  .form-data-table th:first-child,
+  .form-data-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: var(--surface-color);
+    z-index: 2;
+  }
+  
+  .form-data-table th:first-child {
+    background: var(--background-secondary);
+    z-index: 3;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-data-table-container {
+    margin: 0 -var(--spacing-sm);
+    padding: 0 var(--spacing-sm);
+  }
+  
+  .form-data-table {
+    min-width: 500px;
+    font-size: 0.8rem;
+  }
+  
+  .form-data-table th,
+  .form-data-table td {
+    padding: var(--spacing-xs);
+  }
+  
+  /* Simplify action buttons for mobile */
+  .response-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+  }
+  
+  .response-action-btn {
+    padding: var(--spacing-xs);
+    font-size: 0.8rem;
+    min-height: 32px;
+    min-width: 32px;
+  }
+  
+  /* Form data management modal mobile improvements */
+  .form-data-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm);
+  }
+  
+  .form-data-header .form-data-info {
+    text-align: center;
+  }
+  
+  .form-data-header .form-data-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  /* Search input mobile optimization */
+  #searchResponses {
+    width: 100%;
+    max-width: none;
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
 }
 
 .response-checkbox {
