@@ -4255,6 +4255,47 @@ class NoticeBoard {
         }
     }
 
+    // Sync form responses from cloud
+    async syncFormResponsesFromCloud(formId) {
+        console.log(`🔄 Syncing responses for form ${formId} from cloud`);
+        
+        if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
+            console.log('❌ JSONhost not configured for syncing responses');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const cloudData = await response.json();
+            if (!cloudData.forms) {
+                console.log('No forms found in cloud data');
+                return;
+            }
+
+            const cloudForm = cloudData.forms.find(f => f.id === formId);
+            if (!cloudForm) {
+                console.log(`Form ${formId} not found in cloud`);
+                return;
+            }
+
+            // Update local form with cloud responses
+            const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            const localFormIndex = localForms.findIndex(f => f.id === formId);
+            
+            if (localFormIndex !== -1) {
+                localForms[localFormIndex].responses = cloudForm.responses || [];
+                localStorage.setItem('smp-forms', JSON.stringify(localForms));
+                console.log(`✅ Synced ${cloudForm.responses?.length || 0} responses from cloud`);
+            }
+        } catch (error) {
+            console.error('Error syncing form responses from cloud:', error);
+        }
+    }
+
     // Helper function to generate simple hash for anonymization
     async generateSimpleHash(input) {
         const encoder = new TextEncoder();
@@ -4313,57 +4354,41 @@ class NoticeBoard {
                     ${form.description ? `<p class="form-description">${form.description}</p>` : ''}
                     ${isDisabled && this.isAdmin ? '<p class="form-disabled-message"><i class="fas fa-info-circle"></i> This form is disabled and not visible to students.</p>' : ''}
                 </div>
-                ${!isDisabled ? this.createScrollableFormWindow(form, formId) : ''}
+                ${!isDisabled ? this.createSimpleFormLayout(form, formId) : ''}
             </div>
         `;
     }
 
-    // Create scrollable form window similar to scrolling messages
-    createScrollableFormWindow(form, formId) {
+    // Create simple form layout like the image
+    createSimpleFormLayout(form, formId) {
         const questions = form.questions || [];
         if (questions.length === 0) return '';
         
         const questionsHTML = questions.map((question, index) => {
             return `
-                <div class="form-question-item" data-question-index="${index}">
-                    <div class="question-header">
-                        <span class="question-number">${index + 1}</span>
-                        <label class="question-label">
-                            ${question.question}
-                            ${question.required ? '<span class="required">*</span>' : ''}
-                        </label>
+                <div class="simple-form-question" data-question-index="${index}">
+                    <div class="question-row">
+                        <span class="question-text">${question.question}</span>
+                        <span class="question-number">Q${index + 1}:</span>
+                        ${question.required ? '<span class="required">*</span>' : ''}
                     </div>
-                    <div class="question-input">
-                        ${this.createQuestionHTML(question)}
+                    <div class="question-answer">
+                        ${this.createSimpleQuestionHTML(question)}
                     </div>
                 </div>
             `;
         }).join('');
 
         return `
-            <div class="form-scrollable-window">
-                <div class="form-window-header">
-                    <div class="form-progress">
-                        <span class="progress-text">Form Progress</span>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: 0%"></div>
-                        </div>
-                        <span class="progress-count">0 / ${questions.length}</span>
+            <div class="simple-form-container">
+                <form class="notice-form simple-form" data-form-id="${formId}">
+                    ${questionsHTML}
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary submit-form-btn">
+                            Submit Response
+                        </button>
                     </div>
-                </div>
-                <div class="form-window-content">
-                    <form class="notice-form scrollable-form" data-form-id="${formId}">
-                        <div class="form-questions-scroll">
-                            ${questionsHTML}
-                        </div>
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary submit-form-btn">
-                                <i class="fas fa-paper-plane"></i>
-                                Submit Response
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                </form>
             </div>
         `;
     }
@@ -4414,6 +4439,33 @@ class NoticeBoard {
 
     // Setup form progress tracking for scrollable forms
     setupFormProgressTracking(form) {
+        // Check if it's a simple form (no progress tracking needed)
+        if (form.classList.contains('simple-form')) {
+            // Just add basic form validation feedback
+            const questions = form.querySelectorAll('.simple-form-question');
+            if (questions.length === 0) return;
+
+            // Add validation feedback
+            const allInputs = form.querySelectorAll('input, textarea, select');
+            allInputs.forEach(input => {
+                const updateAnswerStatus = () => {
+                    const questionContainer = input.closest('.simple-form-question');
+                    if (questionContainer) {
+                        if (input.value.trim() !== '' || input.checked) {
+                            questionContainer.classList.add('answered');
+                        } else {
+                            questionContainer.classList.remove('answered');
+                        }
+                    }
+                };
+                
+                input.addEventListener('input', updateAnswerStatus);
+                input.addEventListener('change', updateAnswerStatus);
+            });
+            return;
+        }
+
+        // Legacy scrollable form support
         const formContainer = form.closest('.form-scrollable-window');
         if (!formContainer) return;
 
@@ -4581,16 +4633,20 @@ class NoticeBoard {
     }
 
     // Create HTML for individual form questions
-    createQuestionHTML(question) {
+    createQuestionHTML(question, includeLabel = true) {
         const requiredMark = question.required ? '<span class="required">*</span>' : '';
+        
+        const labelHTML = includeLabel ? `
+            <label class="question-label">
+                ${question.question}${requiredMark}
+            </label>
+        ` : '';
         
         switch (question.type) {
             case 'text':
                 return `
                     <div class="form-question">
-                        <label class="question-label">
-                            ${question.question}${requiredMark}
-                        </label>
+                        ${labelHTML}
                         <input type="text" name="question_${question.id}" ${question.required ? 'required' : ''} class="form-input">
                     </div>
                 `;
@@ -4598,9 +4654,7 @@ class NoticeBoard {
             case 'textarea':
                 return `
                     <div class="form-question">
-                        <label class="question-label">
-                            ${question.question}${requiredMark}
-                        </label>
+                        ${labelHTML}
                         <textarea name="question_${question.id}" ${question.required ? 'required' : ''} class="form-textarea" rows="3"></textarea>
                     </div>
                 `;
@@ -4608,9 +4662,7 @@ class NoticeBoard {
             case 'radio':
                 return `
                     <div class="form-question">
-                        <label class="question-label">
-                            ${question.question}${requiredMark}
-                        </label>
+                        ${labelHTML}
                         <div class="radio-group">
                             ${question.options.map((option, index) => `
                                 <label class="radio-option">
@@ -4625,9 +4677,7 @@ class NoticeBoard {
             case 'checkbox':
                 return `
                     <div class="form-question">
-                        <label class="question-label">
-                            ${question.question}${requiredMark}
-                        </label>
+                        ${labelHTML}
                         <div class="checkbox-group">
                             ${question.options.map((option, index) => `
                                 <label class="checkbox-option">
@@ -4642,9 +4692,7 @@ class NoticeBoard {
             case 'select':
                 return `
                     <div class="form-question">
-                        <label class="question-label">
-                            ${question.question}${requiredMark}
-                        </label>
+                        ${labelHTML}
                         <select name="question_${question.id}" ${question.required ? 'required' : ''} class="form-select">
                             <option value="">Select an option</option>
                             ${question.options.map(option => `
@@ -4652,6 +4700,54 @@ class NoticeBoard {
                             `).join('')}
                         </select>
                     </div>
+                `;
+                
+            default:
+                return '';
+        }
+    }
+
+    // Create simple question HTML matching the image design
+    createSimpleQuestionHTML(question) {
+        switch (question.type) {
+            case 'text':
+                return `<input type="text" name="question_${question.id}" class="simple-form-input" ${question.required ? 'required' : ''}>`;
+                
+            case 'textarea':
+                return `<textarea name="question_${question.id}" class="simple-form-textarea" rows="3" ${question.required ? 'required' : ''}></textarea>`;
+                
+            case 'radio':
+                return `
+                    <div class="simple-radio-group">
+                        ${question.options.map((option, index) => `
+                            <label class="simple-radio-option">
+                                <input type="radio" name="question_${question.id}" value="${option}" ${question.required ? 'required' : ''}>
+                                <span class="option-text">${option}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+                
+            case 'checkbox':
+                return `
+                    <div class="simple-checkbox-group">
+                        ${question.options.map((option, index) => `
+                            <label class="simple-checkbox-option">
+                                <input type="checkbox" name="question_${question.id}[]" value="${option}">
+                                <span class="option-text">${option}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+                
+            case 'select':
+                return `
+                    <select name="question_${question.id}" class="simple-form-select" ${question.required ? 'required' : ''}>
+                        <option value="">Select an option</option>
+                        ${question.options.map(option => `
+                            <option value="${option}">${option}</option>
+                        `).join('')}
+                    </select>
                 `;
                 
             default:
@@ -4739,11 +4835,11 @@ class NoticeBoard {
             return;
         }
 
-        // Check for duplicate submissions
-        if (this.isDuplicateSubmission(form, responses)) {
-            this.showToast('This response has already been submitted. Duplicate entries are not allowed.', 'warning');
-            return;
-        }
+        // Skip duplicate checking for now to avoid issues
+        // if (this.isDuplicateSubmission(form, responses)) {
+        //     this.showToast('This response has already been submitted. Duplicate entries are not allowed.', 'warning');
+        //     return;
+        // }
 
         // Create enhanced response object
         const responseData = {
@@ -4761,23 +4857,38 @@ class NoticeBoard {
             status: 'submitted'
         };
 
-        // Save response locally and to cloud with error handling
+        // Save response locally first for immediate feedback
         try {
-            const result = await this.saveFormResponse(form, responseData);
-            
-            if (result.success) {
-                // Show success message and reset form
-                this.showToast(`Response submitted successfully! ID: ${result.responseId.substr(-8)}`, 'success');
-                formElement.reset();
-                
-                // Update form statistics
-                this.updateFormStats(formId);
-                
-                // Track submission for analytics
-                this.trackFormSubmission(formId, form.title);
-            } else {
-                throw new Error(result.error || 'Failed to save response');
+            // Add response to form immediately
+            if (!form.responses) {
+                form.responses = [];
             }
+            form.responses.push(responseData);
+            
+            // Update form in localStorage immediately
+            const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            const formIndex = forms.findIndex(f => f.id === formId);
+            if (formIndex !== -1) {
+                forms[formIndex] = form;
+                localStorage.setItem('smp-forms', JSON.stringify(forms));
+            }
+            
+            // Show success message immediately
+            this.showToast(`Response submitted successfully! ID: ${responseData.id.substr(-8)}`, 'success');
+            formElement.reset();
+            
+            // Save to cloud asynchronously in background
+            this.saveFormResponseToJSONhost(formId, responseData).then(cloudResult => {
+                console.log('Cloud sync completed:', cloudResult);
+            }).catch(error => {
+                console.error('Cloud sync failed, but data is saved locally:', error);
+            });
+            
+            // Update form statistics
+            this.updateFormStats(formId);
+            
+            // Track submission for analytics
+            this.trackFormSubmission(formId, form.title);
         } catch (error) {
             console.error('Form submission error:', error);
             this.showToast(error.message || 'Error submitting form. Please try again.', 'error');
@@ -4795,14 +4906,28 @@ class NoticeBoard {
         // Get existing responses for this form
         const existingResponses = form.responses || [];
         
+        // If no existing responses, it's not a duplicate
+        if (existingResponses.length === 0) {
+            return false;
+        }
+        
         // Compare new responses with existing ones
         for (const existingResponse of existingResponses) {
             let isIdentical = true;
             
+            // Get the responses from the existing response object
+            const existingResponseData = existingResponse.responses || existingResponse.data || {};
+            
             // Compare each question's answer
             for (const questionId in newResponses) {
-                const newAnswer = newResponses[questionId].answer;
-                const existingAnswer = existingResponse.responses[questionId]?.answer;
+                const newAnswer = newResponses[questionId]?.answer;
+                const existingAnswer = existingResponseData[questionId]?.answer;
+                
+                // Skip if either answer is undefined
+                if (newAnswer === undefined || existingAnswer === undefined) {
+                    isIdentical = false;
+                    break;
+                }
                 
                 // Handle array comparison for checkboxes
                 if (Array.isArray(newAnswer) && Array.isArray(existingAnswer)) {
@@ -4818,6 +4943,7 @@ class NoticeBoard {
             }
             
             if (isIdentical) {
+                console.log('Duplicate submission detected');
                 return true; // Found duplicate
             }
         }
@@ -4826,32 +4952,45 @@ class NoticeBoard {
     }
 
     // Save form response to storage and cloud
-    saveFormResponse(form, responseData) {
+    async saveFormResponse(form, responseData) {
         console.log('🔍 DEBUG: Saving form response for form:', form.id);
         console.log('🔍 DEBUG: Response data:', responseData);
         
-        // Add response to form
-        if (!form.responses) {
-            form.responses = [];
+        try {
+            // Add response to form
+            if (!form.responses) {
+                form.responses = [];
+            }
+            form.responses.push(responseData);
+            
+            console.log(`🔍 DEBUG: Form now has ${form.responses.length} responses`);
+            
+            // Update form in localStorage
+            const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            const formIndex = forms.findIndex(f => f.id === form.id);
+            if (formIndex !== -1) {
+                forms[formIndex] = form;
+                localStorage.setItem('smp-forms', JSON.stringify(forms));
+                console.log('✅ Form with response saved to localStorage');
+            }
+            
+            // Save to JSONhost asynchronously (don't block UI)
+            console.log('🔄 Saving response to JSONhost...');
+            this.saveFormResponseToJSONhost(form.id, responseData).then(cloudResult => {
+                console.log('Cloud sync result:', cloudResult);
+                if (!cloudResult.success) {
+                    console.warn('Cloud sync failed, but data is saved locally');
+                }
+            }).catch(error => {
+                console.error('Cloud sync error:', error);
+            });
+            
+            console.log('Form response saved locally:', responseData);
+            return { success: true, responseId: responseData.id, cloudSync: 'pending' };
+        } catch (error) {
+            console.error('Error saving form response:', error);
+            return { success: false, error: error.message };
         }
-        form.responses.push(responseData);
-        
-        console.log(`🔍 DEBUG: Form now has ${form.responses.length} responses`);
-        
-        // Update form in localStorage
-        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
-        const formIndex = forms.findIndex(f => f.id === form.id);
-        if (formIndex !== -1) {
-            forms[formIndex] = form;
-            localStorage.setItem('smp-forms', JSON.stringify(forms));
-            console.log('✅ Form with response saved to localStorage');
-        }
-        
-        // Save to JSONhost
-        console.log('🔄 Saving response to JSONhost...');
-        this.saveFormResponseToJSONhost(form.id, responseData);
-        
-        console.log('Form response saved:', responseData);
     }
 
     // Show form export options
@@ -4929,9 +5068,20 @@ class NoticeBoard {
         // Create CSV rows
         const rows = [headers];
         responses.forEach(response => {
-            const row = [response.id, new Date(response.submittedAt).toLocaleString()];
+            const row = [response.id, new Date(response.submittedAt || response.timestamp).toLocaleString()];
+            
+            // Handle both local and cloud response structures
+            let responseData = {};
+            if (response.responses && typeof response.responses === 'object') {
+                responseData = response.responses;
+            } else if (response.data && response.data.responses && typeof response.data.responses === 'object') {
+                responseData = response.data.responses;
+            } else if (response.data && typeof response.data === 'object') {
+                responseData = response.data;
+            }
+            
             questions.forEach(q => {
-                const answer = response.responses[q.id]?.answer || '';
+                const answer = responseData[q.id]?.answer || '';
                 // Handle array answers (checkboxes)
                 const answerText = Array.isArray(answer) ? answer.join('; ') : answer;
                 row.push(answerText);
@@ -5000,7 +5150,17 @@ class NoticeBoard {
             `;
 
             questions.forEach(q => {
-                const answer = response.responses[q.id]?.answer || 'No answer';
+                // Handle both local and cloud response structures
+                let responseData = {};
+                if (response.responses && typeof response.responses === 'object') {
+                    responseData = response.responses;
+                } else if (response.data && response.data.responses && typeof response.data.responses === 'object') {
+                    responseData = response.data.responses;
+                } else if (response.data && typeof response.data === 'object') {
+                    responseData = response.data;
+                }
+                
+                const answer = responseData[q.id]?.answer || 'No answer';
                 const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
                 htmlContent += `
                     <div class="question">
@@ -5066,15 +5226,43 @@ class NoticeBoard {
     }
 
     // Open form data management modal
-    openFormDataManagement() {
-        if (!this.currentForm || !this.currentForm.responses || this.currentForm.responses.length === 0) {
-            this.showToast('No responses to manage', 'warning');
+    async openFormDataManagement() {
+        if (!this.currentForm) {
+            this.showToast('No form selected', 'warning');
             return;
         }
 
+        console.log('🔍 DEBUG: Opening form data management for form:', this.currentForm.id);
+        
+        // Get fresh form data from localStorage
+        const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+        const updatedForm = forms.find(f => f.id === this.currentForm.id);
+        if (updatedForm) {
+            this.currentForm = updatedForm;
+            console.log('🔍 DEBUG: Updated form from localStorage, responses:', this.currentForm.responses?.length || 0);
+        }
+
+        // Try to sync with cloud to get latest responses (don't wait for it)
+        this.syncFormResponsesFromCloud(this.currentForm.id).then(() => {
+            console.log('🔍 DEBUG: Cloud sync completed, refreshing table');
+            // Refresh the table after cloud sync
+            const freshForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+            const freshForm = freshForms.find(f => f.id === this.currentForm.id);
+            if (freshForm && freshForm.responses && freshForm.responses.length > 0) {
+                this.currentForm = freshForm;
+                this.totalResponses.textContent = this.currentForm.responses.length;
+                this.loadFormDataTable();
+            }
+        }).catch(error => {
+            console.log('Cloud sync failed, continuing with local data:', error);
+        });
+
+        // Show modal immediately with local data
         this.formDataModal.style.display = 'block';
         this.currentFormName.textContent = this.currentForm.title;
-        this.totalResponses.textContent = this.currentForm.responses.length;
+        this.totalResponses.textContent = this.currentForm.responses?.length || 0;
+        
+        console.log('🔍 DEBUG: Current form responses before loading table:', this.currentForm.responses?.length || 0);
         this.loadFormDataTable();
     }
 
@@ -5087,13 +5275,23 @@ class NoticeBoard {
 
     // Load form data into table
     loadFormDataTable() {
+        console.log('🔍 DEBUG: loadFormDataTable called');
+        console.log('🔍 DEBUG: Current form:', this.currentForm);
+        console.log('🔍 DEBUG: Current form responses:', this.currentForm?.responses);
+        
         const responses = this.currentForm.responses || [];
+        console.log('🔍 DEBUG: Found responses array with length:', responses.length);
         
         if (responses.length === 0) {
+            console.log('🔍 DEBUG: No responses found, showing empty message');
             this.formDataTableContainer.innerHTML = `
                 <div class="empty-responses-message">
                     <i class="fas fa-inbox"></i>
                     <p>No responses found</p>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 10px;">
+                        Form ID: ${this.currentForm?.id || 'Unknown'}<br>
+                        Responses array: ${Array.isArray(this.currentForm?.responses) ? 'Array' : typeof this.currentForm?.responses}
+                    </p>
                 </div>
             `;
             return;
@@ -5120,8 +5318,40 @@ class NoticeBoard {
         `;
 
         responses.forEach((response, index) => {
+            console.log('🔍 DEBUG: Processing response', index, ':', response);
+            
             const submittedDate = new Date(response.submittedAt || response.timestamp).toLocaleString();
-            const firstAnswer = Object.values(response.responses || response.data || {})[0]?.answer || 'No data';
+            
+            // Handle both local and cloud response structures
+            let firstAnswer = 'No data';
+            
+            // Local structure: response.responses
+            // Cloud structure: response.data.responses
+            let responseData = null;
+            
+            if (response.responses && typeof response.responses === 'object') {
+                responseData = response.responses;
+            } else if (response.data && response.data.responses && typeof response.data.responses === 'object') {
+                responseData = response.data.responses;
+            } else if (response.data && typeof response.data === 'object') {
+                responseData = response.data;
+            }
+            
+            if (responseData && typeof responseData === 'object') {
+                const values = Object.values(responseData);
+                if (values.length > 0) {
+                    const firstValue = values[0];
+                    
+                    // Handle different possible answer structures
+                    if (firstValue && typeof firstValue === 'object' && firstValue.answer) {
+                        firstAnswer = firstValue.answer;
+                    } else if (typeof firstValue === 'string') {
+                        firstAnswer = firstValue;
+                    } else if (firstValue) {
+                        firstAnswer = String(firstValue);
+                    }
+                }
+            }
             const preview = String(firstAnswer).length > 50 ? String(firstAnswer).substring(0, 50) + '...' : firstAnswer;
 
             tableHTML += `
@@ -5268,7 +5498,17 @@ class NoticeBoard {
     // Render response detail content
     renderResponseDetail(response) {
         const submittedDate = new Date(response.submittedAt || response.timestamp).toLocaleString();
-        const responses = response.responses || response.data || {};
+        
+        // Handle both local and cloud response structures
+        let responses = {};
+        if (response.responses && typeof response.responses === 'object') {
+            responses = response.responses;
+        } else if (response.data && response.data.responses && typeof response.data.responses === 'object') {
+            responses = response.data.responses;
+        } else if (response.data && typeof response.data === 'object') {
+            responses = response.data;
+        }
+        
         const questions = this.currentForm.questions || [];
 
         let detailHTML = `

@@ -4533,27 +4533,27 @@ textarea:focus-visible {
 /* Notice Form Container Styling */
 .notice-form-container {
   margin-top: var(--spacing-md);
-  padding: var(--spacing-md);
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-subtle);
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .notice-form-container .form-header {
-  margin-bottom: var(--spacing-md);
-  padding-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border-color);
 }
 
 .notice-form-container .form-title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--primary-color);
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
 .notice-form-container .form-description {
@@ -4564,15 +4564,15 @@ textarea:focus-visible {
 }
 
 .notice-form .form-question {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .notice-form .question-label {
   display: block;
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .notice-form .required {
@@ -4605,17 +4605,28 @@ textarea:focus-visible {
 .notice-form .radio-group,
 .notice-form .checkbox-group {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
 }
 
 .notice-form .radio-option,
 .notice-form .checkbox-option {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-xs) 0;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
   cursor: pointer;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  transition: all 0.2s ease;
+}
+
+.notice-form .radio-option:hover,
+.notice-form .checkbox-option:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
 }
 
 .notice-form .radio-option input,
@@ -4681,14 +4692,146 @@ textarea:focus-visible {
   .notice-form .radio-group,
   .notice-form .checkbox-group {
     flex-direction: column;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
   }
   
   .notice-form .radio-option,
   .notice-form .checkbox-option {
     padding: var(--spacing-xs);
-    font-size: 0.9rem;
+    gap: var(--spacing-xs);
   }
+  
+  /* Simple form mobile adjustments */
+  .simple-radio-group,
+  .simple-checkbox-group {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .simple-form-input,
+  .simple-form-textarea,
+  .simple-form-select {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+/* Simple form styling matching the image */
+.simple-form-container {
+  margin-top: var(--spacing-sm);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.simple-form-question {
+  margin-bottom: var(--spacing-lg);
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.question-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
+}
+
+.question-text {
+  font-size: 1rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.question-number {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.question-answer {
+  padding-left: 0;
+}
+
+/* Simple form inputs with underlined style */
+.simple-form-input,
+.simple-form-textarea,
+.simple-form-select {
+  width: 100%;
+  padding: var(--spacing-xs) 0;
+  border: none;
+  border-bottom: 2px solid var(--border-color);
+  background: transparent;
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--text-primary);
+  transition: border-bottom-color 0.2s ease;
+  outline: none;
+}
+
+.simple-form-input:focus,
+.simple-form-textarea:focus,
+.simple-form-select:focus {
+  border-bottom-color: var(--primary-color);
+}
+
+.simple-form-textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Simple radio and checkbox groups - horizontal layout */
+.simple-radio-group,
+.simple-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xs);
+}
+
+.simple-radio-option,
+.simple-checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  position: relative;
+}
+
+.simple-radio-option::before,
+.simple-checkbox-option::before {
+  content: "•";
+  color: var(--text-secondary);
+  font-weight: bold;
+  margin-right: var(--spacing-xs);
+  font-size: 1.2rem;
+}
+
+.simple-radio-option input,
+.simple-checkbox-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary-color);
+}
+
+.option-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+/* Visual feedback for answered questions */
+.simple-form-question.answered .question-text {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.simple-form-question.answered .simple-form-input,
+.simple-form-question.answered .simple-form-textarea,
+.simple-form-question.answered .simple-form-select {
+  border-bottom-color: var(--success-color);
 }
 
 /* Extra small screens - similar to scrolling window adjustments */
