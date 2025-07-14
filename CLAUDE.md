@@ -1,4 +1,6 @@
-# SMP College Notice Board - Development Guidelines
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -8,7 +10,7 @@ This is a sophisticated College Notice Board web application built with vanilla 
 
 ### Technology Stack
 - **Frontend**: Pure vanilla HTML5, CSS3, JavaScript (ES6+)
-- **Cloud Sync**: NPoint.io API for read-only data synchronization
+- **Cloud Sync**: JSONhost.com API for bidirectional data synchronization
 - **Storage**: localStorage for offline fallback and caching
 - **UI Framework**: Custom CSS with modern design patterns
 - **Rich Text**: Quill.js editor for content creation
@@ -26,23 +28,31 @@ This is a sophisticated College Notice Board web application built with vanilla 
 ### Notice Management
 - **CRUD Operations**: Full create, read, update, delete functionality
 - **Rich Text Editor**: Quill.js integration with formatting toolbar
-- **Categories**: 9 predefined categories with visual coding
+- **Categories**: 15+ predefined categories with visual coding
 - **Priority System**: Normal, High, Critical with animations
 - **Deadline Tracking**: Visual indicators for overdue/approaching deadlines
 - **Tag System**: Custom keywords for organization and filtering
+- **Display Order**: Manual positioning control for top 3 notices
+
+### Cloud Synchronization
+- **JSONhost Integration**: Full read/write synchronization with API tokens
+- **Real-time Updates**: Automatic sync on CRUD operations
+- **Offline Fallback**: localStorage backup with sync when online
+- **Data Validation**: Input sanitization and error handling
+- **Export/Import**: JSON, CSV, PDF export capabilities
+
+### Forms and Data Capture
+- **Dynamic Forms**: Admin-created forms for student submissions
+- **Form Builder**: Visual form creation with multiple question types
+- **Response Management**: Admin dashboard for form responses
+- **CSV Integration**: Scrolling message display from CSV files
+- **File Attachments**: Support for multiple file types with compression
 
 ### Authentication
 - **Admin System**: Keyword-based authentication (`teju_smp`)
 - **Session Management**: Uses sessionStorage for persistence
 - **Permission Control**: Edit/delete restricted to admin users
 - **UI State Management**: Dynamic visibility of admin controls
-
-### Data Management
-- **Cloud Synchronization**: Read-only sync with NPoint.io
-- **Offline Fallback**: Automatic localStorage backup
-- **Local Storage**: Full CRUD operations stored locally
-- **Data Validation**: Comprehensive input sanitization
-- **Export/Import**: JSON, CSV, PDF export capabilities
 
 ### User Interface
 - **Dark Mode**: Complete theme system with CSS variables
@@ -57,6 +67,7 @@ This is a sophisticated College Notice Board web application built with vanilla 
 ```bash
 # Start local server (choose one):
 python -m http.server 8000    # Python
+npm start                     # NPM script
 npx serve .                   # Node.js  
 php -S localhost:8000         # PHP
 
@@ -115,7 +126,9 @@ open http://localhost:8000
     author: string,         // Department/faculty name
     tags: string[],         // Array of custom keyword tags
     timestamp: string,      // Creation timestamp (ISO format)
-    lastModified: string    // Last edit timestamp (ISO format)
+    lastModified: string,   // Last edit timestamp (ISO format)
+    order: number,          // Display order (1-3 for priority positioning)
+    attachments: object[]   // File attachments with metadata
 }
 ```
 
@@ -130,20 +143,102 @@ boolean // Theme preference
 // sessionStorage: 'isAdmin'
 boolean // Authentication state
 
-// NPoint Cloud Structure
+// JSONhost Cloud Structure
 {
     notices: Notice[],
-    lastUpdated: string
+    lastUpdated: string,
+    version: string,
+    metadata: {
+        title: string,
+        description: string,
+        service: string
+    }
 }
+```
+
+## Code Architecture
+
+### Main Application Class
+```javascript
+class NoticeBoard {
+    constructor() {
+        this.notices = [];
+        this.filteredNotices = [];
+        this.currentCategory = 'all';
+        this.isAdmin = false;
+        this.quillEditor = null;
+        this.fileData = new Map();
+        this.init();
+    }
+
+    async init() {
+        await this.loadAllCSVFiles();
+        await this.initializeCloudSync();
+        this.setupEventListeners();
+        this.loadSettings();
+        await this.render();
+    }
+}
+```
+
+### Key Methods
+
+#### Data Management
+- `loadAllCSVFiles()`: Loads CSV files for scrolling messages
+- `syncWithCloud()`: Orchestrates cloud synchronization
+- `syncWithJsonhost()`: Handles JSONhost-specific sync operations
+- `uploadToCloud()`: Uploads local changes to cloud storage
+- `optimizeNoticesForCloud()`: Compresses data for cloud storage
+
+#### UI Operations
+- `render()`: Main rendering method for notices display
+- `renderNotices()`: Renders individual notice cards
+- `handleCategoryFilter()`: Filters notices by category
+- `openNoticeModal()`: Opens notice creation/editing modal
+- `showNoticeDetails()`: Displays notice in detail view
+
+#### Form Management
+- `openFormsModal()`: Opens form builder interface
+- `addQuestion()`: Adds questions to form builder
+- `saveFormData()`: Saves form configuration
+- `manageFormData()`: Admin interface for form responses
+
+### File Structure
+```
+/
+├── index.html              # Main application file
+├── script.js              # Application logic (NoticeBoard class)
+├── styles.css             # Complete styling system
+├── file-hosting-debug.js   # File hosting utilities
+├── README.md              # Basic project information
+├── JSONHOST_SETUP.md      # Detailed setup instructions
+├── CLAUDE.md              # This file
+├── package-lock.json      # NPM configuration
+├── 1.csv                  # Sample CSV for scrolling messages
+├── 2.csv                  # Sample CSV for scrolling messages
+└── prompt.txt             # Development notes
 ```
 
 ## Configuration
 
-### NPoint Setup
-1. Create JSON endpoint at npoint.io
-2. Copy the endpoint ID
-3. Update `window.NPOINT_CONFIG` in `index.html:295-298`
-4. Replace placeholder with actual NPoint ID
+### JSONhost Setup
+1. Create JSON endpoint at jsonhost.com
+2. Enable POST/PATCH requests in admin settings
+3. Copy API authorization token
+4. Update `window.CLOUD_CONFIG` in `index.html:590-617`
+5. Replace placeholder with actual JSONhost ID and API token
+
+### Cloud Configuration
+```javascript
+window.CLOUD_CONFIG = {
+    service: 'jsonhost',
+    jsonhost: {
+        jsonId: 'your-json-id',
+        apiToken: 'your-api-token',
+        baseUrl: 'https://jsonhost.com/json/'
+    }
+}
+```
 
 ### Environment Variables
 - No server-side environment variables
@@ -199,7 +294,7 @@ boolean // Authentication state
 - Client-side only application
 - Admin code is hardcoded (suitable for controlled environments)
 - No server-side validation or authentication
-- Data is publicly accessible if JSONBin credentials are exposed
+- Data is publicly accessible if JSONhost credentials are exposed
 
 ## Testing Strategy
 
@@ -236,7 +331,7 @@ boolean // Authentication state
 - Examples: Netlify, Vercel, GitHub Pages, Firebase Hosting
 
 ### Pre-deployment Checklist
-- [ ] Update JSONBin configuration with real credentials
+- [ ] Update JSONhost configuration with real credentials
 - [ ] Test all functionality in production environment
 - [ ] Verify CDN resources are accessible
 - [ ] Check mobile responsiveness
@@ -246,7 +341,7 @@ boolean // Authentication state
 ### Environment Setup
 ```bash
 # Clone or download files
-# Update JSONBin configuration in index.html
+# Update JSONhost configuration in index.html
 # Deploy to static hosting service
 # Test live application
 ```
@@ -256,9 +351,9 @@ boolean // Authentication state
 ### Common Issues
 
 #### Cloud Sync Not Working
-- Check NPoint ID configuration in index.html
+- Check JSONhost ID and API token configuration in index.html
 - Verify network connectivity
-- Test NPoint URL directly in browser
+- Test JSONhost URL directly in browser
 - Check browser console for API errors
 
 #### Styles Not Loading
@@ -326,12 +421,56 @@ boolean // Authentication state
 - Build process for optimization
 - Unit and integration tests
 
-## Contact Information
+## Common Issues and Solutions
 
-This application was developed for SMP College as a modern notice board solution. For technical support or feature requests, refer to the project documentation or contact the development team.
+### Cloud Sync Issues
+- **Error**: "Cloud sync not configured"
+  - **Solution**: Verify JSONhost ID and API token in configuration
+  
+- **Error**: "Sync failed"
+  - **Solution**: Check network connectivity and JSONhost service status
 
-Admin Access Code: `teju_smp`
+### Performance Issues
+- **Slow Loading**: Check file sizes and optimize images
+- **Memory Leaks**: Ensure proper event listener cleanup
+- **Rendering Issues**: Verify CSS compatibility across browsers
+
+### Data Issues
+- **Missing Notices**: Check localStorage and cloud sync status
+- **Form Responses**: Verify form configuration and API endpoints
+- **CSV Files**: Ensure proper file format and encoding
+
+## Development Best Practices
+
+### Code Organization
+- Keep the main NoticeBoard class modular
+- Use async/await for all Promise-based operations
+- Implement proper error handling with try-catch blocks
+- Follow consistent naming conventions
+
+### CSS Guidelines
+- Use CSS custom properties for all design tokens
+- Follow mobile-first responsive design
+- Implement proper focus states for accessibility
+- Use semantic HTML elements
+
+### JavaScript Patterns
+- Use ES6+ features consistently
+- Implement proper event delegation
+- Handle errors gracefully with user feedback
+- Optimize for performance with debouncing
+
+## Admin Access
+
+Default admin code: `teju_smp`
+
+This provides access to:
+- Add/edit/delete notices
+- Form builder and management
+- Export/import functionality
+- Response management
+- System configuration
 
 ---
 
-*Last Updated: 2024*
+*This application serves as a comprehensive notice board solution for educational institutions, combining modern web technologies with practical functionality for daily administrative tasks.*

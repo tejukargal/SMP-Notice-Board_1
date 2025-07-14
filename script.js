@@ -486,6 +486,10 @@ class NoticeBoard {
         try {
             console.log('🔄 Triggering initial cloud sync...');
             await this.syncWithCloud();
+            
+            // Process any queued retries
+            this.processRetryQueue();
+            
             console.log('✅ Initial cloud sync completed');
         } catch (error) {
             console.error('Initial cloud sync failed:', error);
@@ -4108,81 +4112,156 @@ class NoticeBoard {
         return null;
     }
 
+    // Enhanced form response synchronization with better error handling and race condition prevention
     async saveFormResponseToJSONhost(formId, responseData) {
         console.log(`🔄 saveFormResponseToJSONhost called with formId: ${formId}`);
         console.log('🔍 DEBUG: Response data to save:', responseData);
         
         if (!window.CLOUD_CONFIG?.jsonhost?.jsonId) {
             console.log('❌ JSONhost not configured for form responses');
-            return;
+            return { success: false, error: 'JSONhost not configured' };
         }
 
+        // Use a mutex to prevent race conditions
+        const lockKey = `form_response_lock_${formId}`;
+        if (this.syncLocks && this.syncLocks[lockKey]) {
+            console.log('🔒 Form response sync already in progress, queuing...');
+            return new Promise((resolve) => {
+                setTimeout(() => resolve(this.saveFormResponseToJSONhost(formId, responseData)), 1000);
+            });
+        }
+
+        this.syncLocks = this.syncLocks || {};
+        this.syncLocks[lockKey] = true;
+
         try {
-            // Get current forms data
-            console.log('📥 Getting current forms from JSONhost...');
-            const formsData = await this.getFormsFromJSONhost() || [];
-            console.log(`📥 Retrieved ${formsData.length} forms from JSONhost`);
-            const form = formsData.find(f => f.id === formId);
-            console.log('🔍 DEBUG: Found form in JSONhost:', form ? {id: form.id, title: form.title, responsesCount: form.responses?.length || 0} : 'NOT FOUND');
+            // Get current data with retry mechanism
+            let currentData, attempt = 0;
+            const maxAttempts = 3;
             
-            if (form) {
-                if (!form.responses) {
-                    form.responses = [];
-                }
-                
-                // Add new response
-                form.responses.push({
-                    id: Date.now().toString(),
-                    timestamp: new Date().toISOString(),
-                    data: responseData
-                });
-
-                // Get complete current data and update only the form
-                const getCurrentResponse = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
-                let currentData = {
-                    notices: this.notices,
-                    forms: formsData,
-                    lastUpdated: new Date().toISOString(),
-                    version: "1.0",
-                    metadata: {
-                        title: "SMP College Notice Board",
-                        description: "Official notices and announcements",
-                        totalNotices: this.notices.length,
-                        totalForms: formsData.length,
-                        service: "jsonhost"
+            while (attempt < maxAttempts) {
+                try {
+                    const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`);
+                    if (response.ok) {
+                        currentData = await response.json();
+                        break;
                     }
-                };
-
-                if (getCurrentResponse.ok) {
-                    currentData = await getCurrentResponse.json();
-                    currentData.forms = formsData; // Update with new form data
-                    currentData.lastUpdated = new Date().toISOString();
-                    currentData.metadata.totalForms = formsData.length;
+                    throw new Error(`HTTP ${response.status}`);
+                } catch (error) {
+                    attempt++;
+                    console.log(`⚠️ Attempt ${attempt} failed, retrying...`);
+                    if (attempt >= maxAttempts) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
                 }
+            }
 
-                // Save complete structure back
-                const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
-                    },
-                    body: JSON.stringify(currentData)
-                });
+            if (!currentData) {
+                throw new Error('Failed to retrieve current data from JSONhost');
+            }
 
-                if (response.ok) {
-                    console.log('✅ Form response saved to JSONhost successfully');
-                    console.log(`✅ Form "${form.title}" now has ${form.responses.length} responses in cloud`);
-                    return true;
+            // Ensure forms array exists
+            if (!currentData.forms) {
+                currentData.forms = [];
+            }
+
+            // Find or create form
+            let form = currentData.forms.find(f => f.id === formId);
+            if (!form) {
+                console.log(`⚠️ Form ${formId} not found in cloud, checking local storage...`);
+                const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+                form = localForms.find(f => f.id === formId);
+                if (form) {
+                    currentData.forms.push(form);
+                    console.log(`✅ Added form ${formId} to cloud from local storage`);
                 } else {
-                    console.error('❌ Failed to save form response to JSONhost:', response.status);
-                    return false;
+                    throw new Error(`Form ${formId} not found in local storage or cloud`);
+                }
+            }
+
+            // Initialize responses array if needed
+            if (!form.responses) {
+                form.responses = [];
+            }
+
+            // Create enhanced response object with better metadata
+            const enhancedResponse = {
+                id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                ipHash: await this.generateSimpleHash(navigator.userAgent + Date.now()),
+                deviceInfo: {
+                    platform: navigator.platform,
+                    language: navigator.language,
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+                },
+                formVersion: form.version || '1.0',
+                data: responseData,
+                status: 'submitted',
+                lastModified: new Date().toISOString()
+            };
+
+            // Add response to form
+            form.responses.push(enhancedResponse);
+            form.lastModified = new Date().toISOString();
+            form.responseCount = form.responses.length;
+
+            // Update metadata
+            currentData.lastUpdated = new Date().toISOString();
+            currentData.metadata = currentData.metadata || {};
+            currentData.metadata.totalForms = currentData.forms.length;
+            currentData.metadata.totalResponses = currentData.forms.reduce((sum, f) => sum + (f.responses?.length || 0), 0);
+            currentData.metadata.lastResponseTime = new Date().toISOString();
+
+            // Save with retry mechanism
+            attempt = 0;
+            while (attempt < maxAttempts) {
+                try {
+                    const response = await fetch(`${window.CLOUD_CONFIG.jsonhost.baseUrl}${window.CLOUD_CONFIG.jsonhost.jsonId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': window.CLOUD_CONFIG.jsonhost.apiToken
+                        },
+                        body: JSON.stringify(currentData)
+                    });
+
+                    if (response.ok) {
+                        console.log('✅ Form response saved to JSONhost successfully');
+                        console.log(`✅ Form "${form.title}" now has ${form.responses.length} responses in cloud`);
+                        
+                        // Update local storage to maintain consistency
+                        const localForms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+                        const localFormIndex = localForms.findIndex(f => f.id === formId);
+                        if (localFormIndex !== -1) {
+                            localForms[localFormIndex] = form;
+                            localStorage.setItem('smp-forms', JSON.stringify(localForms));
+                        }
+                        
+                        return { success: true, responseId: enhancedResponse.id, responseCount: form.responses.length };
+                    }
+                    throw new Error(`HTTP ${response.status}`);
+                } catch (error) {
+                    attempt++;
+                    console.log(`⚠️ Save attempt ${attempt} failed, retrying...`);
+                    if (attempt >= maxAttempts) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
                 }
             }
         } catch (error) {
             console.error('Error saving form response to JSONhost:', error);
-            return false;
+            return { success: false, error: error.message };
+        } finally {
+            delete this.syncLocks[lockKey];
         }
+    }
+
+    // Helper function to generate simple hash for anonymization
+    async generateSimpleHash(input) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(input);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substr(0, 16);
     }
 
     // Create form HTML for display in notice cards
@@ -4580,16 +4659,41 @@ class NoticeBoard {
         }
     }
 
-    // Handle form submission with duplicate validation
+    // Enhanced form submission handling with better validation and user feedback
     async handleFormSubmission(formElement) {
         const formId = formElement.dataset.formId;
-        if (!formId) return;
+        if (!formId) {
+            this.showToast('Invalid form configuration', 'error');
+            return;
+        }
 
-        // Get form data
+        // Disable form during submission
+        const submitButton = formElement.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton?.textContent || 'Submit';
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        }
+
+        // Get form data with error handling
         const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
         const form = forms.find(f => f.id === formId);
         if (!form) {
-            this.showToast('Form not found', 'error');
+            this.showToast('Form configuration not found', 'error');
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = originalButtonText;
+            }
+            return;
+        }
+
+        // Check if form is enabled
+        if (!form.enabled) {
+            this.showToast('This form is currently disabled', 'error');
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = originalButtonText;
+            }
             return;
         }
 
@@ -4641,21 +4745,49 @@ class NoticeBoard {
             return;
         }
 
-        // Create response object
+        // Create enhanced response object
         const responseData = {
-            id: Date.now().toString(),
+            id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             formId: formId,
             responses: responses,
             submittedAt: new Date().toISOString(),
-            userAgent: navigator.userAgent.substring(0, 100) // For basic identification
+            userAgent: navigator.userAgent.substring(0, 100),
+            deviceInfo: {
+                platform: navigator.platform,
+                language: navigator.language,
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            formVersion: form.version || '1.0',
+            status: 'submitted'
         };
 
-        // Save response locally and to cloud
-        this.saveFormResponse(form, responseData);
-        
-        // Show success message and reset form
-        this.showToast('Response submitted successfully!', 'success');
-        formElement.reset();
+        // Save response locally and to cloud with error handling
+        try {
+            const result = await this.saveFormResponse(form, responseData);
+            
+            if (result.success) {
+                // Show success message and reset form
+                this.showToast(`Response submitted successfully! ID: ${result.responseId.substr(-8)}`, 'success');
+                formElement.reset();
+                
+                // Update form statistics
+                this.updateFormStats(formId);
+                
+                // Track submission for analytics
+                this.trackFormSubmission(formId, form.title);
+            } else {
+                throw new Error(result.error || 'Failed to save response');
+            }
+        } catch (error) {
+            console.error('Form submission error:', error);
+            this.showToast(error.message || 'Error submitting form. Please try again.', 'error');
+        } finally {
+            // Re-enable form
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = originalButtonText;
+            }
+        }
     }
 
     // Check if this is a duplicate submission
@@ -5250,9 +5382,268 @@ class NoticeBoard {
     }
 }
 
+// Additional helper functions for enhanced form data capture
+NoticeBoard.prototype.updateFormResponseCount = function(formId, count) {
+    const responseCountElements = document.querySelectorAll(`[data-form-id="${formId}"] .response-count`);
+    responseCountElements.forEach(element => {
+        element.textContent = count;
+    });
+};
+
+// Update form statistics in UI
+NoticeBoard.prototype.updateFormStats = function(formId) {
+    const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+    const form = forms.find(f => f.id === formId);
+    if (form) {
+        const responseCount = form.responses?.length || 0;
+        this.updateFormResponseCount(formId, responseCount);
+    }
+};
+
+// Track form submission for analytics
+NoticeBoard.prototype.trackFormSubmission = function(formId, formTitle) {
+    const analytics = JSON.parse(localStorage.getItem('form-analytics') || '{}');
+    if (!analytics[formId]) {
+        analytics[formId] = {
+            title: formTitle,
+            submissions: 0,
+            lastSubmission: null,
+            dailySubmissions: {}
+        };
+    }
+    
+    analytics[formId].submissions++;
+    analytics[formId].lastSubmission = new Date().toISOString();
+    
+    const today = new Date().toISOString().split('T')[0];
+    analytics[formId].dailySubmissions[today] = (analytics[formId].dailySubmissions[today] || 0) + 1;
+    
+    localStorage.setItem('form-analytics', JSON.stringify(analytics));
+};
+
+// Queue failed operations for retry
+NoticeBoard.prototype.queueForRetry = function(type, data) {
+    const retryQueue = JSON.parse(localStorage.getItem('retry-queue') || '[]');
+    retryQueue.push({
+        type,
+        data,
+        timestamp: new Date().toISOString(),
+        attempts: 0,
+        maxAttempts: 3
+    });
+    localStorage.setItem('retry-queue', JSON.stringify(retryQueue));
+    
+    // Schedule retry
+    setTimeout(() => this.processRetryQueue(), 5000);
+};
+
+// Enhanced retry queue processing with better error handling
+NoticeBoard.prototype.processRetryQueue = async function() {
+    const retryQueue = JSON.parse(localStorage.getItem('retry-queue') || '[]');
+    if (retryQueue.length === 0) return;
+
+    console.log(`🔄 Processing retry queue with ${retryQueue.length} items...`);
+    const updatedQueue = [];
+    
+    for (const item of retryQueue) {
+        if (item.attempts >= item.maxAttempts) {
+            console.log(`❌ Retry limit reached for ${item.type}:`, item.data);
+            // Log failed items for debugging
+            this.logFailedSync(item);
+            continue;
+        }
+
+        item.attempts++;
+        console.log(`🔄 Retrying ${item.type} (attempt ${item.attempts}/${item.maxAttempts})...`);
+
+        try {
+            if (item.type === 'form_response') {
+                const result = await this.saveFormResponseToJSONhost(item.data.formId, item.data.responseData);
+                if (result && result.success) {
+                    console.log(`✅ Retry successful for ${item.type}`);
+                    // Update UI to reflect successful sync
+                    this.updateSyncStatus('Synced via JSONhost (Read/Write)', 'success');
+                    continue; // Don't re-queue
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Retry failed for ${item.type}:`, error);
+            item.lastError = error.message;
+            item.lastAttempt = new Date().toISOString();
+        }
+
+        updatedQueue.push(item);
+    }
+
+    localStorage.setItem('retry-queue', JSON.stringify(updatedQueue));
+    
+    // Update sync status based on queue state
+    if (updatedQueue.length > 0) {
+        this.updateSyncStatus(`Syncing... (${updatedQueue.length} pending)`, 'warning');
+        // Schedule next retry with exponential backoff
+        setTimeout(() => this.processRetryQueue(), Math.min(30000 * Math.pow(2, updatedQueue[0].attempts - 1), 300000));
+    } else {
+        this.updateSyncStatus('Synced via JSONhost (Read/Write)', 'success');
+    }
+};
+
+// Log failed sync items for debugging
+NoticeBoard.prototype.logFailedSync = function(item) {
+    const failedSyncs = JSON.parse(localStorage.getItem('failed-syncs') || '[]');
+    failedSyncs.push({
+        ...item,
+        finalFailure: new Date().toISOString()
+    });
+    
+    // Keep only last 50 failed syncs
+    if (failedSyncs.length > 50) {
+        failedSyncs.splice(0, failedSyncs.length - 50);
+    }
+    
+    localStorage.setItem('failed-syncs', JSON.stringify(failedSyncs));
+};
+
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.noticeBoard = new NoticeBoard();
+    // Initialize sync locks object
+    if (!window.noticeBoard) {
+        window.noticeBoard = new NoticeBoard();
+        window.noticeBoard.syncLocks = {};
+    }
+    
+    window.testGoogleDrive = () => window.noticeBoard.testGoogleDriveSetup();
+    console.log('💡 To test Google Drive setup, run: testGoogleDrive()');
+});
+
+// Additional helper functions for enhanced form data capture
+NoticeBoard.prototype.updateFormResponseCount = function(formId, count) {
+    const responseCountElements = document.querySelectorAll(`[data-form-id="${formId}"] .response-count`);
+    responseCountElements.forEach(element => {
+        element.textContent = count;
+    });
+};
+
+// Update form statistics in UI
+NoticeBoard.prototype.updateFormStats = function(formId) {
+    const forms = JSON.parse(localStorage.getItem('smp-forms') || '[]');
+    const form = forms.find(f => f.id === formId);
+    if (form) {
+        const responseCount = form.responses?.length || 0;
+        this.updateFormResponseCount(formId, responseCount);
+    }
+};
+
+// Track form submission for analytics
+NoticeBoard.prototype.trackFormSubmission = function(formId, formTitle) {
+    const analytics = JSON.parse(localStorage.getItem('form-analytics') || '{}');
+    if (!analytics[formId]) {
+        analytics[formId] = {
+            title: formTitle,
+            submissions: 0,
+            lastSubmission: null,
+            dailySubmissions: {}
+        };
+    }
+    
+    analytics[formId].submissions++;
+    analytics[formId].lastSubmission = new Date().toISOString();
+    
+    const today = new Date().toISOString().split('T')[0];
+    analytics[formId].dailySubmissions[today] = (analytics[formId].dailySubmissions[today] || 0) + 1;
+    
+    localStorage.setItem('form-analytics', JSON.stringify(analytics));
+};
+
+// Queue failed operations for retry
+NoticeBoard.prototype.queueForRetry = function(type, data) {
+    const retryQueue = JSON.parse(localStorage.getItem('retry-queue') || '[]');
+    retryQueue.push({
+        type,
+        data,
+        timestamp: new Date().toISOString(),
+        attempts: 0,
+        maxAttempts: 3
+    });
+    localStorage.setItem('retry-queue', JSON.stringify(retryQueue));
+    
+    // Schedule retry
+    setTimeout(() => this.processRetryQueue(), 5000);
+};
+
+// Enhanced retry queue processing with better error handling
+NoticeBoard.prototype.processRetryQueue = async function() {
+    const retryQueue = JSON.parse(localStorage.getItem('retry-queue') || '[]');
+    if (retryQueue.length === 0) return;
+
+    console.log(`🔄 Processing retry queue with ${retryQueue.length} items...`);
+    const updatedQueue = [];
+    
+    for (const item of retryQueue) {
+        if (item.attempts >= item.maxAttempts) {
+            console.log(`❌ Retry limit reached for ${item.type}:`, item.data);
+            // Log failed items for debugging
+            this.logFailedSync(item);
+            continue;
+        }
+
+        item.attempts++;
+        console.log(`🔄 Retrying ${item.type} (attempt ${item.attempts}/${item.maxAttempts})...`);
+
+        try {
+            if (item.type === 'form_response') {
+                const result = await this.saveFormResponseToJSONhost(item.data.formId, item.data.responseData);
+                if (result && result.success) {
+                    console.log(`✅ Retry successful for ${item.type}`);
+                    // Update UI to reflect successful sync
+                    this.updateSyncStatus('Synced via JSONhost (Read/Write)', 'success');
+                    continue; // Don't re-queue
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Retry failed for ${item.type}:`, error);
+            item.lastError = error.message;
+            item.lastAttempt = new Date().toISOString();
+        }
+
+        updatedQueue.push(item);
+    }
+
+    localStorage.setItem('retry-queue', JSON.stringify(updatedQueue));
+    
+    // Update sync status based on queue state
+    if (updatedQueue.length > 0) {
+        this.updateSyncStatus(`Syncing... (${updatedQueue.length} pending)`, 'warning');
+        // Schedule next retry with exponential backoff
+        setTimeout(() => this.processRetryQueue(), Math.min(30000 * Math.pow(2, updatedQueue[0].attempts - 1), 300000));
+    } else {
+        this.updateSyncStatus('Synced via JSONhost (Read/Write)', 'success');
+    }
+};
+
+// Log failed sync items for debugging
+NoticeBoard.prototype.logFailedSync = function(item) {
+    const failedSyncs = JSON.parse(localStorage.getItem('failed-syncs') || '[]');
+    failedSyncs.push({
+        ...item,
+        finalFailure: new Date().toISOString()
+    });
+    
+    // Keep only last 50 failed syncs
+    if (failedSyncs.length > 50) {
+        failedSyncs.splice(0, failedSyncs.length - 50);
+    }
+    
+    localStorage.setItem('failed-syncs', JSON.stringify(failedSyncs));
+};
+
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize sync locks object
+    if (!window.noticeBoard) {
+        window.noticeBoard = new NoticeBoard();
+        window.noticeBoard.syncLocks = {};
+    }
     
     // Make test function globally available for debugging
     window.testGoogleDrive = () => window.noticeBoard.testGoogleDriveSetup();
