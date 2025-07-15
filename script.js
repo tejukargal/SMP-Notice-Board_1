@@ -1525,19 +1525,37 @@ class NoticeBoard {
                     }
                 }
                 
-                // Add scrolling content click listener only if popup is enabled
+                // Add scrolling content click listener for pause/resume and optional popup
                 const scrollingContent = card.querySelector('.scrolling-message-inline');
-                if (scrollingContent && notice.popupEnabled !== false) {
+                if (scrollingContent) {
                     scrollingContent.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        this.showScrollingDataModal(notice);
+                        
+                        // Check if this is a double-click (for popup functionality)
+                        const now = Date.now();
+                        const lastClick = scrollingContent.dataset.lastClick || 0;
+                        const clickDelay = now - lastClick;
+                        
+                        if (clickDelay < 300 && notice.popupEnabled !== false) {
+                            // Double-click detected and popup is enabled - show modal
+                            this.showScrollingDataModal(notice);
+                        } else {
+                            // Single click - toggle pause/resume
+                            scrollingContent.classList.toggle('paused');
+                        }
+                        
+                        scrollingContent.dataset.lastClick = now;
                     });
+                    
                     scrollingContent.style.cursor = 'pointer';
-                    scrollingContent.classList.add('scrolling-data-clickable');
-                } else if (scrollingContent) {
-                    // Reset cursor and classes if popup is disabled
-                    scrollingContent.style.cursor = 'default';
-                    scrollingContent.classList.remove('scrolling-data-clickable');
+                    
+                    if (notice.popupEnabled !== false) {
+                        scrollingContent.classList.add('scrolling-data-clickable');
+                        scrollingContent.title = 'Click to pause/resume, double-click to view details';
+                    } else {
+                        scrollingContent.classList.remove('scrolling-data-clickable');
+                        scrollingContent.title = 'Click to pause/resume scrolling';
+                    }
                 }
             }
         });
