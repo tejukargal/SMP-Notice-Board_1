@@ -3665,17 +3665,20 @@ class NoticeBoard {
 
         questionDiv.innerHTML = `
             <div class="question-header">
-                <span class="question-number">Question ${questionData.id}</span>
-                <div class="question-controls">
-                    <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionUp(${questionData.id})" title="Move Up">
-                        <i class="fas fa-arrow-up"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionDown(${questionData.id})" title="Move Down">
-                        <i class="fas fa-arrow-down"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="noticeBoard.removeQuestion(${questionData.id})" title="Delete Question">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                <div class="question-header-left"></div>
+                <div class="question-header-right">
+                    <span class="question-number">Question ${questionData.id}</span>
+                    <div class="question-controls">
+                        <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionUp(${questionData.id})" title="Move Up">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-icon" onclick="noticeBoard.moveQuestionDown(${questionData.id})" title="Move Down">
+                            <i class="fas fa-arrow-down"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="noticeBoard.removeQuestion(${questionData.id})" title="Delete Question">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
             
